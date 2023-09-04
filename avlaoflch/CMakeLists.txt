@@ -10,7 +10,7 @@ list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavformat.so)
 
 
 #aux_source_directory(/workspace/ffmpeg/lib DIR_LIB_FFMPEG)
-add_library( avlaoflch SHARED ${DIR_LIB_AV_LAOFLCH} )
+add_library( avlaoflch SHARED  ${DIR_LIB_AV_LAOFLCH} )
 #add_library( avlaoflch_static STATIC ${DIR_LIB_AV_LAOFLCH} )
 #link_libraries("/workspace/ffmpeg/lib")
 target_link_libraries(avlaoflch ${FFMPEG_LIB})
