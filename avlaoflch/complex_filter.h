@@ -5,7 +5,7 @@
 #ifndef COMPLEX_FILTER_LAOFLCH_H
 #define COMPLEX_FILTER_LAOFLCH_H
 
-
+#include <ass/ass.h>
 
 #include <libavutil/timestamp.h>
 #include <libavutil/fifo.h>
@@ -14,6 +14,7 @@
 #include <libavutil/audio_fifo.h>
 #include <libavformat/avformat.h>
 #include <libavfilter/avfilter.h>
+#include "drawutils.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -22,6 +23,24 @@
 //#include "complex_filter.h"
 #define GROW_ARRAY(array, nb_elems)\
     array = grow_array(array, sizeof(*array), &nb_elems, nb_elems + 1)
+
+typedef struct AssContext {
+    const AVClass *class;
+    ASS_Library  *library;
+    ASS_Renderer *renderer;
+    ASS_Track    *track;
+    char *filename;
+    char *fontsdir;
+    char *charenc;
+    char *force_style;
+    int stream_index;
+    int alpha;
+    uint8_t rgba_map[4];
+    int     pix_step[4];       ///< steps per pixel for each plane of the main output
+    int original_w, original_h;
+    int shaping;
+    FFDrawContext draw;
+} AssContext;
 
 typedef struct BufferSourceContext {
     const AVClass    *class;
@@ -115,6 +134,7 @@ typedef struct FilterGraph {
     int reconfiguration;
 
     char *subtitle_path;
+    AssContext *ass;
 
     bool if_hw;
 
@@ -405,4 +425,11 @@ void *grow_array(void *array, int elem_size, int *size, int new_size);
 int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,VideoHandleProcessInfo **video_handle_process);
 
 int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames);
+
+static av_cold int init(AssContext *ass);
+static av_cold int init_subtitles( AssContext *ass );
+int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base);
+static int attachment_is_font(AVStream * st);
+static void overlay_ass_image(AssContext *ass, AVFrame *picref,
+                              const ASS_Image *image);
 #endif /*COMPLEX_FILTER_LAOFLCH_H*/

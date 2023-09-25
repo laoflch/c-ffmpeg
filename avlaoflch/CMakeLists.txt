@@ -6,6 +6,7 @@ list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavcodec.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavutil.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavfilter.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavformat.so)
+list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libass.so.5)
 
 
 
@@ -23,7 +24,7 @@ target_link_libraries(avlaoflch ${FFMPEG_LIB})
 
 #list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavcodec.so)
 include_directories(/workspace/ffmpeg/FFmpeg)
-add_executable(ComplexFilter complex_filter.c )
+add_executable(ComplexFilter complex_filter.c drawutils.c )
 
 #target_link_directories(ComplexFilter PUBLIC  /workspace/ffmpeg/lib )
 
