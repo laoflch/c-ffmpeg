@@ -6,6 +6,7 @@ list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavcodec.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavutil.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavfilter.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavformat.so)
+list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libswresample.so)
 list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libass.so.5)
 
 

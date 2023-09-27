@@ -228,24 +228,24 @@ static void add_input_streams( AVFormatContext *ic, int stream_index,int input_s
                }
            }
         }
+
+
         ist->dec_ctx = avcodec_alloc_context3(ist->dec);
         if (!ist->dec_ctx) {
             fprintf(stderr, "Could not allocate video decodec context\n");
             return ; 
         }
+ printf("decodec_id:%d sample_fmt%d channel_layout: %"PRId64"\n",ist->dec_ctx->codec_id,ist->dec_ctx->sample_fmt,av_get_default_channel_layout(8));
   //      printf("AVStream time_base:{%d %d} i:%d\n",st->time_base.den,st->time_base.num,i);
+        
         ret = avcodec_parameters_to_context(ist->dec_ctx, par);
         if (ret < 0){
             printf("error code %d \n",ret);
             return ;
         }
-
-        /*ist->dec = avcodec_find_decoder(ist->dec_ctx->codec_id);
-        if (!ist->dec) {
-        fprintf(stderr, "Could not allocate video decodec \n");
-        return ; 
-    }*/
-
+ printf("decodec_id:%d sample_fmt%d\n",ist->dec_ctx->codec_id,ist->dec_ctx->sample_fmt);
+        ist->dec_ctx->pkt_timebase=st->time_base;
+        ist->dec_ctx->time_base=st->time_base;
         ist->dec_ctx->framerate=av_guess_frame_rate(ic,st,NULL);
 
         if(hw&&par->codec_type==AVMEDIA_TYPE_VIDEO){ 
@@ -255,27 +255,27 @@ static void add_input_streams( AVFormatContext *ic, int stream_index,int input_s
             return ;
         }
 
-        printf("decodec_id:%d",ist->dec_ctx->codec_id);
+        printf("decodec_id:%d sample_fmt%d\n",ist->dec_ctx->codec_id,ist->dec_ctx->sample_fmt);
  //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
         //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
-ist->dec_ctx->time_base=st->time_base;
+
 //if(!av_dict_get(ist->decoder_opts,"threads",NULL,0))
    //av_dict_set(&ist->decoder_opts,"threads","8",0);
-    if(par->codec_type==AVMEDIA_TYPE_VIDEO){
+        if(par->codec_type==AVMEDIA_TYPE_VIDEO){
 
- ist->dec_ctx->pix_fmt=AV_PIX_FMT_CUDA;
-                      ist->dec_ctx->sw_pix_fmt=AV_PIX_FMT_NV12;
+            ist->dec_ctx->pix_fmt=AV_PIX_FMT_CUDA;
+            ist->dec_ctx->sw_pix_fmt=AV_PIX_FMT_NV12;
 
-   //ist->dec_ctx->thread_count=8;
+            ist->dec_ctx->thread_count=8;
    //av_log(ist->dec_ctx, AV_LOG_INFO, "codec capabilities:%d",ist->dec_ctx->codec->capabilities);
-   //ist->dec_ctx->active_thread_type=FF_THREAD_SLICE;
+            ist->dec_ctx->active_thread_type=FF_THREAD_FRAME;
     }
         if ((ret = avcodec_open2(ist->dec_ctx, ist->dec, &ist->decoder_opts)) < 0) {
            printf("open codec faile %d \n",ret);
            return ;
         }
 
-        printf("dec_ctx:%d",ist->dec_ctx->frame_size);
+        printf("dec_ctx:%d sample_fmt:%d \n",ist->dec_ctx->frame_size,ist->dec_ctx->sample_fmt);
 
         //
 
@@ -287,12 +287,13 @@ ist->dec_ctx->time_base=st->time_base;
 
 }
 
-static OutputStream *new_output_stream(AVFormatContext *oc,  int i,int codec_type,int codec_id )
+static OutputStream *new_output_stream(AVFormatContext *oc,  int output_stream_index,int codec_type,int codec_id )
 {
     OutputStream *ost;
     //AVStream *st = avformat_new_stream(oc, NULL);
+    AVStream *st = oc->streams[output_stream_index];
 
-    //AVCodecParameters *par = st->codecpar;
+    AVCodecParameters *par = st->codecpar;
 
     int idx      = oc->nb_streams - 1, ret = 0;
     const char *bsfs = NULL, *time_base = NULL;
@@ -306,7 +307,7 @@ static OutputStream *new_output_stream(AVFormatContext *oc,  int i,int codec_typ
     if (!(ost = av_mallocz(sizeof(*ost))))
         return NULL;
 
-    output_streams[i] = ost;
+    output_streams[output_stream_index] = ost;
 
     //ost->file_index = nb_output_files - 1;
     ost->index      = idx;
@@ -318,7 +319,7 @@ static OutputStream *new_output_stream(AVFormatContext *oc,  int i,int codec_typ
     //if(codec_type== AVMEDIA_TYPE_AUDIO&&if_audio_fifo){
     //ost->audio_fifo=av_mallocz(sizeof(AVAudioFifo *));
     //};
-    
+   //oc->streams[1]->codecpar-> 
     //st->codecpar->codec_type = codec_type;
     //printf("encodec_id:%d",codec_id);
     //
@@ -341,17 +342,20 @@ static OutputStream *new_output_stream(AVFormatContext *oc,  int i,int codec_typ
         return NULL; 
     }
 
+        printf("sample_fmt:%d par sample_fmt:%d\n",ost->enc_ctx->sample_fmt,par->format);
 
-    //ret = avcodec_parameters_to_context(ost->enc_ctx, par);
-    //if (ret < 0){
-     //       printf("error code %d \n",ret);
-      //      return NULL;
-    //}
+printf("audio stream time  sample_rate:%d channel_layout:%d channels:%d\n",par->sample_rate,par->channel_layout,par->channels);
+    ret = avcodec_parameters_to_context(ost->enc_ctx, par);
+    if (ret < 0){
+            printf("error code %d \n",ret);
+            return NULL;
+    }
+ printf("sample_fmt:%d par sample_fmt:%d\n",ost->enc_ctx->sample_fmt,par->format);
     if (codec_type== AVMEDIA_TYPE_VIDEO){
     //    ost->enc = avcodec_find_encoder_by_name("h264_nvenc");
-   //ost->enc_ctx->thread_count=32;
+       ost->enc_ctx->thread_count=8;
    //av_log(ost->enc_ctx, AV_LOG_INFO, "codec capabilities:%d",ost->enc_ctx->codec->capabilities);
-   //ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
+       ost->enc_ctx->active_thread_type=FF_THREAD_FRAME;
     }
 
 
@@ -547,27 +551,29 @@ int simple_audio_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCod
 
         int s_stream_index=pkt->stream_index;
         int s_duation=pkt->duration*factor;
+
+       
         if ((*enc_ctx)->codec_type==AVMEDIA_TYPE_AUDIO &&
         output_streams[out_stream_index]->audio_fifo!=NULL){
                //uint8_t** new_data=frame->extended_data;
       //int new_size=frame->nb_samples;
-       ret=write_frame_to_audio_fifo(output_streams[out_stream_index]->audio_fifo, frame->extended_data,  frame->nb_samples);
-      printf("write audio bytes:%d\n",frame->nb_samples);
-      if (ret<0){
-            printf("write aframe to fifo error");
- av_packet_unref(pkt);
-        av_packet_unref(out_pkt);
-        av_frame_unref(frame);
+            ret=write_frame_to_audio_fifo(output_streams[out_stream_index]->audio_fifo, frame->extended_data,  frame->nb_samples);
+            printf("write audio bytes:%d\n",frame->nb_samples);
+            if (ret<0){
+                printf("write aframe to fifo error");
+                av_packet_unref(pkt);
+                av_packet_unref(out_pkt);
+                av_frame_unref(frame);
 
-            return 1;
-      }
-      if (s_pts==0){
+                return 1;
+            }
+            if (s_pts==0){
 //设置返回pts为输入帧的pts
       //s_pts=pkt->duration*factor;//pkt->pts;
            //s_pts=21;
-      }
+            }
      
-      } 
+        } 
       //printf("av_audio_fifo_size:%d\n",av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo));
  //printf("1111111111111122");
  //
@@ -581,7 +587,7 @@ int simple_audio_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCod
                }
        if (!flushing)
        {
-         ret=read_frame_from_audio_fifo(output_streams[out_stream_index]->audio_fifo,*enc_ctx,&frame_enc);
+         ret=read_frame_from_audio_fifo(output_streams[out_stream_index]->audio_fifo,*enc_ctx,&frame_enc,dec_ctx->sample_fmt);
          if(ret<0){
              printf("read frame from ctx error");
  av_packet_unref(pkt);
@@ -592,8 +598,25 @@ int simple_audio_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCod
          }
 
          times++;
-                       } 
-    int ret_enc = avcodec_send_frame(*enc_ctx, frame_enc);
+                       }
+
+       printf("dec sample fmt:%d ;enc sample fmt:%d \n",dec_ctx->sample_fmt,(*enc_ctx)->sample_fmt);
+
+       //音频输入输出的采样格式sample_fmt不一样,需要对音频数据进行重采样
+      // if (dec_ctx->sample_fmt!=(*enc_ctx)->sample_fmt){
+
+        // ret=audio_resample(&frame_enc, swr_ctx, dec_ctx->sample_rate, dec_ctx->sample_fmt, dec_ctx->channel_layout, dec_ctx->channels, frame_enc->nb_samples, (*enc_ctx)->sample_rate, (*enc_ctx)->sample_fmt, (*enc_ctx)->channel_layout);
+
+       //  if(ret<0){
+
+        //   av_log(swr_ctx,AV_LOG_DEBUG,"resample audio frame fail!");
+
+         //}
+
+      // }
+
+       printf("audio format%d\n ",frame_enc->format);
+        int ret_enc = avcodec_send_frame(*enc_ctx, frame_enc);
     if (ret_enc < 0) {
         fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
         continue;
@@ -750,6 +773,303 @@ output_streams[stream_mapping[pkt->stream_index]]->frame_number++;
 
 
 }
+int complex_filter_audio_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping, int s_pts,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph,char *afilter_desrc){
+
+
+
+  //AVFrame *frame;
+
+  if(pkt!=NULL){
+
+
+    int ret;
+  printf("dec time base:{%d %d}",dec_ctx->time_base.den,dec_ctx->time_base.num);
+
+    ret = avcodec_send_packet(dec_ctx, pkt);
+    if (ret < 0) {
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        //av_frame_unref(frame);
+
+        fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
+        return 1;
+    }
+
+
+    while (ret >= 0) {
+
+
+        ret = avcodec_receive_frame(dec_ctx, frame);
+ printf("in sample fmt:%d\n",frame->format);
+      if (ret == AVERROR(EAGAIN)) {
+
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+        return ret;
+      }else if( ret == AVERROR_EOF){
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+                 return 0;
+      }
+        else if (ret < 0) {
+            fprintf(stderr, "Error during decoding %d \n ",ret);
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+            return 1 ;
+        }
+    if (frame!=NULL)
+        printf("Send frame %"PRId64" size %"PRId64" stream index%d aspect{%d %d} \n", frame->pts,frame->linesize,pkt->stream_index,frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num);
+    int enc_frame_size=(*enc_ctx)->frame_size;
+    if(dec_ctx->frame_size!=enc_frame_size&&frame->nb_samples!=enc_frame_size){
+              printf("diff frame size dec frame size:%d enc frame size:%d \n",dec_ctx->frame_size,enc_frame_size);
+        float factor=(float)enc_frame_size/(float)frame->nb_samples;
+
+        int s_stream_index=pkt->stream_index;
+        int s_duation=pkt->duration*factor;
+
+       
+        if ((*enc_ctx)->codec_type==AVMEDIA_TYPE_AUDIO &&
+        output_streams[out_stream_index]->audio_fifo!=NULL){
+               //uint8_t** new_data=frame->extended_data;
+      //int new_size=frame->nb_samples;
+            ret=write_frame_to_audio_fifo(output_streams[out_stream_index]->audio_fifo, frame->extended_data,  frame->nb_samples);
+            printf("write audio bytes:%d\n",frame->nb_samples);
+            if (ret<0){
+                printf("write aframe to fifo error");
+                av_packet_unref(pkt);
+                av_packet_unref(out_pkt);
+                av_frame_unref(frame);
+
+                return 1;
+            }
+            if (s_pts==0){
+//设置返回pts为输入帧的pts
+      //s_pts=pkt->duration*factor;//pkt->pts;
+           //s_pts=21;
+            }
+     
+        } 
+      //printf("av_audio_fifo_size:%d\n",av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo));
+ //printf("1111111111111122");
+ //
+    int times=0;
+    while ((av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo))>=enc_frame_size){
+       AVFrame *frame_enc=NULL;
+ printf("av_audio_fifo_zize:%d enc_frame_size:%d\n",av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo),enc_frame_size);
+      bool flushing=av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo)==0 ;
+      if (frame_enc!=NULL){
+
+               }
+       if (!flushing)
+       {
+         ret=read_frame_from_audio_fifo(output_streams[out_stream_index]->audio_fifo,*enc_ctx,&frame_enc,dec_ctx->sample_fmt);
+         if(ret<0){
+             printf("read frame from ctx error");
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+             return 1;
+         }
+
+         times++;
+                       }
+
+       printf("dec sample fmt:%d ;enc sample fmt:%d \n",dec_ctx->sample_fmt,(*enc_ctx)->sample_fmt);
+
+       //音频输入输出的采样格式sample_fmt不一样,需要对音频数据进行重采样
+      // if (dec_ctx->sample_fmt!=(*enc_ctx)->sample_fmt){
+
+        // ret=audio_resample(&frame_enc, swr_ctx, dec_ctx->sample_rate, dec_ctx->sample_fmt, dec_ctx->channel_layout, dec_ctx->channels, frame_enc->nb_samples, (*enc_ctx)->sample_rate, (*enc_ctx)->sample_fmt, (*enc_ctx)->channel_layout);
+
+       //  if(ret<0){
+
+        //   av_log(swr_ctx,AV_LOG_DEBUG,"resample audio frame fail!");
+
+         //}
+
+      // }
+      //
+printf("out sample fmt:%d\n",frame_enc->format);
+       //音频重采集
+       if(*filter_graph==NULL){
+
+         if(init_audio_filters(afilter_desrc, buffersink_ctx, buffersrc_ctx, filter_graph, dec_ctx, dec_ctx->time_base)){
+
+         }
+
+       }
+
+
+       if(filter_audio_frame(frame_enc,  *buffersink_ctx, *buffersrc_ctx)<0){
+
+       }
+
+
+       printf("audio format%d\n ",frame_enc->format);
+        int ret_enc = avcodec_send_frame(*enc_ctx, frame_enc);
+    if (ret_enc < 0) {
+        fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
+        continue;
+    } 
+    //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+    //
+    //接收编码完成的packet
+    while (ret_enc >= 0) {
+        ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
+          if (ret_enc == AVERROR(EAGAIN)) {
+              //av_freep(frame->extended_data);
+              //av_freep(&(frame->extended_data[0]));
+               av_frame_unref(frame_enc);
+              av_frame_free(&frame_enc);
+//out_pkt->duration=pkt->duration*factor;
+//out_pkt->pts=s_pts+out_pkt->duration;
+ //out_pkt->dts=out_pkt->pts;
+ //s_pts = out_pkt->pts;
+              printf("111111155555555111111111");
+              break;
+         }else if( ret_enc == AVERROR_EOF){
+              //av_freep(frame->extended_data);
+ //av_freep(&(frame->extended_data[0]));
+              av_frame_unref(frame_enc);
+              av_frame_free(&frame_enc);
+
+            break;
+
+    
+      }else if (ret_enc < 0) {
+            fprintf(stderr, "Error during encoding\n");
+              //av_freep(frame->extended_data);
+
+              //av_freep(&(frame->extended_data[0]));
+ //av_freep(frame_enc->extended_data);
+    //av_freep(&(frame_enc->data[0]));
+              av_frame_unref(frame_enc);
+              av_frame_free(&frame_enc);
+
+            return 1;
+        }
+              
+
+ if (out_pkt->data!=NULL) {
+   printf("factor:%f ret:%d av_audio_fifo_zize:%d\n",factor,ret,av_audio_fifo_size(output_streams[out_stream_index]->audio_fifo));
+
+
+ //out_pkt->duration=2*pkt->duration*factor;
+
+          //编码后pkt的pts是空的，需要重新设置
+          /*if (factor>1){
+           
+            out_pkt->pts=pkt->pts+pkt->duration-out_pkt->duration*times;
+          }else if (factor>0&&factor<1){
+            out_pkt->pts=pkt->pts-out_pkt->duration*times;
+          }else if (factor==1){
+            out_pkt->pts=pkt->pts;
+          }
+ */
+printf("out pts: %"PRId64" \n", s_pts);
+pkt->stream_index=s_stream_index;
+//out_pkt->duration=pkt->duration*factor;
+out_pkt->duration=s_duation;
+out_pkt->pts=s_pts+out_pkt->duration;
+//if((out_pkt->pts % 3) == 0){
+ //  out_pkt->pts++;
+//}
+//
+//
+if((output_streams[stream_mapping[pkt->stream_index]]->frame_number%(int)(1/(1-factor)))==2){
+  out_pkt->pts++;
+
+}
+output_streams[stream_mapping[pkt->stream_index]]->frame_number++;
+ out_pkt->dts=out_pkt->pts;
+ s_pts = out_pkt->pts;
+
+//out_pkt->dts=out_pkt->pts;
+
+
+     // av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+      }
+    //输出流
+
+    ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame_enc,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,stream_mapping);
+
+
+    //av_freep(frame->extended_data);
+    //av_freep(&(frame->data[0]));
+    //av_freep(frame_enc->extended_data);
+    //av_freep(&(frame_enc->data[0]));
+   
+
+    //av_frame_unref(rame});
+
+    av_frame_unref(frame_enc);
+    av_frame_free(&frame_enc);
+
+    if(ret_enc<0){
+        printf("interleaved write error:%d",ret_enc);
+//av_packet_unref(pkt);//确保非输出packet也释放
+        return ret_enc;
+    }
+
+    av_packet_unref(out_pkt);
+    //s_pts++; 
+ //printf(" ret:%d\n",ret_enc);
+
+    }
+    }
+//av_frame_unref(frame);
+//av_packet_unref(pkt);//确保非输出packet也释放
+    return s_pts;  
+    }else{
+
+       printf("same frame size\n");
+       int ret_enc = avcodec_send_frame(*enc_ctx, frame);
+       if (ret_enc < 0) {
+          fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
+          continue;
+       }
+       while (ret_enc >= 0) {
+          ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
+          if (ret_enc == AVERROR(EAGAIN)) {
+
+            break;
+
+          }else if( ret_enc == AVERROR_EOF){
+       
+             break;
+
+    
+          }else if (ret_enc < 0) {
+             fprintf(stderr, "Error during encoding\n");
+             return 1;
+          }
+          ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,stream_mapping);
+          if(ret_enc<0){
+             printf("interleaved write error:%d",ret_enc);
+             return ret_enc;
+          } 
+          return frame->pts; 
+       }
+
+    //输出流
+    //
+       
+     }
+   }
+    return 0;
+  }else{
+      return 1;
+  } 
+
+
+}
+
 static int config_input(AssContext *ass, int format,int w,int h)
 {
     //AssContext *ass = inlink->dst->priv;
@@ -1197,527 +1517,6 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@@@@2%s \n",filter_graph_des->ass->filename);
 }
 
 //frame->pts=s_pts;
-
-
-//frame->width=1918;
-//frame->height=802;
-//frame->format=AV_PIX_FMT_NV12;
-//printf("----------------------------------");
-        if (!(hw_frame = av_frame_alloc())) {
-        //    err = AVERROR(ENOMEM);
-        //    goto close;
-        }
-        //
-        //hw_frame=av_frame_alloc();
-
-
-        if ((ret = av_hwframe_get_buffer((*enc_ctx)->hw_frames_ctx, hw_frame, 0)) < 0) {
-            fprintf(stderr, "Error code: %s.\n", ret);
-         //   goto close;
-        }
-
-       // if (!hw_frame->hw_frames_ctx) {
-            //err = AVERROR(ENOMEM);
-            //goto close;
-        //}
-        if ((ret = av_hwframe_transfer_data(hw_frame, frame, 0)) < 0) {
-            fprintf(stderr, "Error while transferring frame data to surface."
-                    "Error code: %s.\n", ret);
-            //goto close;
-        }
-    hw_frame->pict_type=AV_PICTURE_TYPE_NONE;//解决specified frame type (3) at 358 is not compatible with keyframe interval问题
- //printf("after filter frame  pts:%"PRId64" w:%d h:%d pix_fmt:%d aspect{%d %d} \n",pkt->pts,frame->width,frame->height,(*enc_ctx), frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num);
- av_frame_unref(frame);
- //av_free(frame->data[0]);
- //
- // av_frame_unref(frame);
-    int ret_enc = avcodec_send_frame(*enc_ctx, hw_frame);
-
-//printf("return code %d",ret_enc);
-    if (ret_enc < 0) {
- av_frame_unref(frame);
-   av_frame_unref(sw_frame);
- //if(sw_frame!=NULL){
- av_frame_free(&sw_frame);
-        fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
-        continue;
-    }
-
-av_frame_unref(hw_frame);
-
-    while (ret_enc >= 0) {
-    //while(1){
-        ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
-//printf("%s: pts:%"PRId64,"out_pkt",out_pkt->pts);
-//printf("%s: dts:%"PRId64,"out_pkt",out_pkt->dts);
-          if (ret_enc == AVERROR(EAGAIN)) {
-        //printf("$$$$$$$222222$$$$$$$$$$");
- printf("pkt_out size : %d \n",out_pkt->size);
-  //av_frame_unref(frame);
-   av_frame_unref(sw_frame);
- //if(sw_frame!=NULL){
- av_frame_free(&sw_frame);
- 
- //
-   //av_free(sw_frame->data[0]);
- //av_frame_unref(frame);
- //av_frame_unref(sw_frame);
-   //av_free(hw_frame->data[0]);
-  //  av_frame_unref(hw_frame);
-    //av_frame_free(&hw_frame);
- //if(sw_frame!=NULL){
- //av_frame_free(&sw_frame);
-//return 0;
-//
-break;
-
-      } else if( ret_enc == AVERROR_EOF){
- //av_frame_unref(frame);
-   av_frame_unref(sw_frame);
- //if(sw_frame!=NULL){
- av_frame_free(&sw_frame);
-            break;
-      } else if (ret_enc < 0) {
- //av_frame_unref(frame);
-   av_frame_unref(sw_frame);
- //if(sw_frame!=NULL){
- av_frame_free(&sw_frame);
-            fprintf(stderr, "Error during encoding\n");
-           break; 
-        }
-
-
-if (out_pkt->data!=NULL) {
-
-     out_pkt->pts=pkt->pts;
-     out_pkt->dts=pkt->dts;
-     out_pkt->duration=pkt->duration;
-
-  /*AVRational *time_base = &output_streams[stream_mapping[out_pkt->stream_index]]->enc_ctx->time_base;
- 
-         
-printf("after filter pkt  pts:%"PRId64" w:%d h:%d pix_fmt:%d aspect{%d %d}  duration:%d time:%s\n",out_pkt->dts,frame->width,frame->height,(*enc_ctx), frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num,out_pkt->duration,av_ts2timestr(out_pkt->duration,time_base));
-      av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
-   */   }
-    //输出流
-     printf("after filter pkt  pts:%"PRId64" w:%d h:%d pix_fmt:%d aspect{%d %d}  duration:%d\n",out_pkt->dts,frame->width,frame->height,(*enc_ctx), frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num,pkt->duration);
-
-     //out_pkt->pts=pkt->pts;
-     //out_pkt->dts=pkt->dts;
-     //out_pkt->duration=pkt->duration;
-     //out_pkt->
-    ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,stream_mapping);
- //if(sw_frame!=NULL){
-    //av_frame_unref(sw_frame);
-    //av_frame_free(&sw_frame);
-    //sw_frame=NULL;
- //}
- if(ret_enc<0){
-        printf("interleaved write error:%d",ret_enc);
-//av_packet_unref(pkt);//确保非输出packet也释放
-       // return ret_enc;
-    }
-
- break;
- //av_frame_unref(sw_frame);
-    //av_frame_free(&sw_frame);
-    //sw_frame=NULL;
-    }
-   //av_free(sw_frame->data[0]);
- //av_frame_unref(frame);
- //av_frame_free(&frame);
- //av_frame_unref(sw_frame);
- //av_frame_free(&sw_frame);
-    printf("11111---111111111111111");
-   //av_free(hw_frame->data[0]);
-    
-    av_frame_free(&hw_frame);
-
- //av_frame_unref(sw_frame);
-    //av_frame_free(&sw_frame);
-   // sw_frame=NULL;
-
-    
-    }
-
-/*
-    av_frame_unref(frame);
-    av_free(sw_frame->data[0]);
-    av_frame_unref(sw_frame);
-    av_frame_free(&sw_frame);
-
-
-
-
-
-     av_free(hw_frame->data[0]);
-    av_frame_unref(hw_frame);
-    av_frame_free(&hw_frame);
-//av_packet_unref(pkt);//确保非输出packet也释放
-    sw_frame=NULL;
-*/
-    return 0;
-  }else{
-      return 1;
-  } 
-
-}
-
-int subtitle_logo_native_video_codec_func2(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des ){
-    if(pkt!=NULL){
-    AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
-printf("================== pkt duration:%d\n",pkt->duration);
-    int ret ;
-    int s_pts,s_frame_pts;  
-    ret = avcodec_send_packet(dec_ctx, pkt);
-    if (ret < 0) {
-        fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
-        return 1;
-    }
-
-    while (ret >= 0) {
-        ret = avcodec_receive_frame(dec_ctx, frame);
-      if (ret == AVERROR(EAGAIN)) {
-
-         av_frame_unref(frame);
-//printf("----------------------------------");
-         return ret;
-
-      }else if( ret == AVERROR_EOF){
-                  return 0;
-      }else if (ret < 0) {
-            fprintf(stderr, "Error during decoding %d \n ",ret);
-             av_frame_unref(frame);
-
-            return 1 ;
-        }
-
-      printf("best_effort_timestamp %"PRId64"  pts: %"PRId64" \n",frame->best_effort_timestamp,frame->pts);
-
- s_pts=frame->best_effort_timestamp;//必须使用best_effort_timestamp,其实就是pts设置为0,否则过滤器会有内存泄漏
-//
-//
-//s_pts=0;
-//s_pts=frame->pts;
- //s_pts=av_frame_get_best_effort_timestamp(&frame);
-     if (filter_graph_des->if_hw &&frame->format == hw_pix_fmt) {
-         
-         sw_frame=av_frame_alloc();
-
-                  /* retrieve data from GPU to CPU */
-         if ((ret = av_hwframe_transfer_data(sw_frame, frame, 0)) < 0) {
-                fprintf(stderr, "Error transferring the data to system memory\n");
-               // goto fail;
-         }
-         //sw_frame->pict_type=AV_PICTURE_TYPE_NONE;//解决specified frame type (3) at 358 is not compatible with keyframe interval问题
-         //sw_frame->pts=s_pts;
- //sw_frame->pts=frame->pts;
-         //av_frame_free(&frame);
-         //
-         //av_free(frame->data[0]);
-         av_frame_unref(frame) ;
-        // av_frame_free(&frame);
-//memcpy(frame, sw_frame,sizeof(AVFrame));
-
-         //frame = sw_frame;
-     }else{
-         sw_frame=frame;
-     } 
- sw_frame->pts=s_pts;
- //
- //sw_frame->pts=frame->pts;
-
-
- 
-
-     /*if (sw_frame->pts>0){
-       sw_frame->pts=filter_graph_des->current_frame_pts;
-
-       filter_graph_des->current_frame_pts++;
-
-     }
-*/
-//log_packet(fmt_ctx, pkt, "out-1");    /* send the frame to the encoder */ 
-
-    if (sw_frame!=NULL)
-        printf("Send frame %"PRId64" %"PRId64" size %"PRId64" aspect{%d %d} time_base{%d %d}\n", s_pts,filter_graph_des->current_frame_pts,sw_frame->linesize,sw_frame->sample_aspect_ratio.den,sw_frame->sample_aspect_ratio.num,dec_ctx->time_base.num,dec_ctx->time_base.den);
-//printf("##########################331");
-   //处理视频滤镜 
-    //这两个变量在本文里没有用的，只是要传进去。
-                AVFilterInOut *inputs, *cur, *outputs;
-                    AVRational logo_tb = {0};
-                    AVRational logo_fr = {0};
-
-AVFrame *logo_frame; 
-
-//                    if(filter_graph_des->logo_frame==NULL){ 
-//logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg/doc/examples/laoflch-mc-log.png",&logo_tb,&logo_fr);
-
-//filter_graph_des->logo_frame=&logo_frame;}else{
-  logo_frame=*(filter_graph_des->logo_frame);
-//}
- //printf("logo frame pix_fmt %d \n", logo_frame->format);
-
-
-                    if(  *filter_graph==NULL ){
-AVFilterGraph *filter_graph_point;
-AVFilterContext *mainsrc_ctx_point,*logo_ctx_point,*resultsink_ctx_point ;
-                    //int64_t logo_next_pts = 0,main_next_pts = 0;
-                                                            //AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg/doc/examples/laoflch-mc-log.png",&logo_tb,&logo_fr);
-                    //初始化滤镜容器
-                    filter_graph_point = avfilter_graph_alloc();
-
-                    *filter_graph=filter_graph_point;
-                    if (!filter_graph) {
-                        printf("Error: allocate filter graph failed\n");
-                        return -1;
-                    }
-
-                    // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
-                    //AVRational tb = fmt_ctx->streams[0]->time_base;
-                    //time_base 必须与输入的dec_ctx的time一致，字幕才能正常显示
-                    AVRational tb = dec_ctx->time_base;
-                    AVRational fr = dec_ctx->framerate;//av_guess_frame_rate(fmt_ctx, fmt_ctx->streams[0], NULL);
-                    //AVRational logo_sar = logo_frame->sample_aspect_ratio;
-                    AVRational sar = sw_frame->sample_aspect_ratio;
-                    AVBPrint args;
-                    av_bprint_init(&args, 0, AV_BPRINT_SIZE_AUTOMATIC);
-
-                    av_bprintf(&args,
-                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[main];"
-                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[logo];"//[logo]fade=out:240:480[logo_fade];"
-                               
-                               "[main][logo]overlay=x=%d:y=%d[result];"
-                               "[result]format=nv12[result_2];" 
-                              // "[result_2]scale=iw/2:ih/2[result_3];"
-                               "[result_2]buffersink",
-                               sw_frame->width, sw_frame->height, sw_frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,
-                               //logo_frame->width, logo_frame->height, logo_frame->format, logo_tb.num,logo_tb.den ,
-                               //logo_sar.num,logo_sar.den, logo_fr.num, logo_fr.den,                       
-                               logo_frame->width,logo_frame->height,logo_frame->format,1001,48000,2835,2835,24000,1001,
-                               sw_frame->width-logo_frame->width,sw_frame->height-logo_frame->height);
-                               //sw_frame->width-logo_frame->width,sw_frame->height-logo_frame->height);
-
-                    ret = avfilter_graph_parse2(filter_graph_point, args.str, &inputs, &outputs);
-                    if (ret < 0) {
-                        printf("Cannot parse2 graph\n");
-                        return ret;
-                    }
-
-
-                    //正式打开滤镜
-                    ret = avfilter_graph_config(filter_graph_point, NULL);
-                    if (ret < 0) {
-                        printf("Cannot configure graph\n");
-                        return ret;
-                    }
-
- //printf("**********************************88");
-
-  //根据 名字 找到 AVFilterContext
-                    mainsrc_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffer_0");
-                    *mainsrc_ctx=mainsrc_ctx_point;
-                    logo_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffer_1");
-                    *logo_ctx=logo_ctx_point;
-                    resultsink_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffersink_4");
-                    *resultsink_ctx=resultsink_ctx_point;
-
-
-                    //ret = av_buffersrc_add_frame_flags(logo_ctx_point, logo_frame,AV_BUFFERSRC_FLAG_PUSH);
-                    //if(ret < 0){
-                     //   printf("Error: av_buffersrc_add_frame failed\n");
-                      //  return ret;
-                    //}
-                    //因为 logo 只有一帧，发完，就需要关闭 buffer 滤镜
-                    //logo_next_pts = logo_frame->pts + logo_frame->pkt_duration;
-                    //ret = av_buffersrc_close(logo_ctx_point, logo_next_pts, AV_BUFFERSRC_FLAG_PUSH);
-
-                    /* 发 null 也可以，但是不太正规。可能某些场景下会有问题
-                    ret = av_buffersrc_add_frame(logo_ctx, NULL);
-                    if(ret < 0){
-                        printf("Error: av_buffersrc_add_frame failed\n");
-                        return ret;
-                    }*/
-
-                }
-//printf("Logo frame w:%d h:%d pix_fmt:%d aspect{%d %d} \n",logo_frame->width,logo_frame->height,logo_frame->format, logo_frame->sample_aspect_ratio.den,logo_frame->sample_aspect_ratio.num);
-                     //else
-   //ret = av_buffersrc_add_frame_flags(logo_ctx_point, logo_frame,AV_BUFFERSRC_FLAG_PUSH);
-                    //if(ret < 0){
-                     //   printf("Error: av_buffersrc_add_frame failed\n");
-                      //  return ret;
-                    //}
-                                //if( frame_num <= 10 ){
-                                //
-                                //
-                                //
-             /**
-              * 根据overlay的叠加顺序，必须上层先追加frame，再追加下层,如:logo_ctx必须先add，之后才能add mainsrc_ctx
-              * 如果帧要重复使用，则add的必须选用AV_BUFFERSRC_FLAG_KEEP_REF这个选项，确保frame被复制之后再add，且add之后不清空frame数据
-              * 如果图片要转换成视频流，则必须设置frame的pts
-              *
-              *
-              */                   
-                //     logo_frame->pts=sw_frame->pts;
-
-                     //int frame_size=av_image_get_buffer_size(logo_frame->format,logo_frame->width,logo_frame->height,1);
-                     
-                     //uint8_t* tmp_buffer=(uint8_t*)av_malloc(frame_size*sizeof(uint8_t)); a
-                     //
-                //logo_frame->pts=sw_frame->pts;
-
-                AVFrame *new_logo_frame;
-                new_logo_frame=av_frame_alloc();
-
-                
-
-                new_logo_frame->width=logo_frame->width;
-                new_logo_frame->height=logo_frame->height;
-                new_logo_frame->format=logo_frame->format;
-                //ret=av_image_alloc(new_logo_frame->data,new_logo_frame->linesize,logo_frame->width,logo_frame->height,logo_frame->format,1);
-                //ret=av_image_fill_arrays(new_logo_frame->data,new_logo_frame->linesize,tmp_buffer,logo_frame->format,new_logo_frame->width,new_logo_frame->height,1);
-                ret=av_frame_get_buffer(new_logo_frame, 0);
-                if (ret<0){
-                     printf("Error: fill new logo frame failed:%d \n",ret);
-
-                }
-                ret=av_frame_copy_props(new_logo_frame, logo_frame);
-                ret=av_frame_copy(new_logo_frame, logo_frame);
-                if (ret<0){
-                     printf("Error: copy logo frame failed:%d \n",ret);
-
-                }
- new_logo_frame->pts=pkt->pts;//frame的pts为0,需要设置为pkt的pts
-
-//uint8_t* tmp_buffer=logo_frame->data[0];
-                //filter_graph_des->logo_frame=&logo_frame;
-                //new_logo_frame->pts=sw_frame->pts;
-//printf("after filter logo frame  pts:%"PRId64" ",new_logo_frame->pts);
- av_frame_unref(frame);
-
-                //uint64_t current_pts=sw_frame->pts;
-                if (filter_graph_des->if_fade ){
-
-                     handle_logo_fade(new_logo_frame,filter_graph_des->duration_frames,filter_graph_des->interval_frames,filter_graph_des->present_frames);
-
-
-                 }
-                    printf(" logo frame addr:%d \n",logo_frame);
- new_logo_frame->pts=s_pts;
-                   // uint8_t[] *data=logo_frame->data[0];
- //                   printf(" logo frame size:%d \n",logo_frame->data[0]);
-//
-                                       //
-                    //new_logo_frame->pts=sw_frame->pts;
-//BufferSourceContext *s=(*logo_ctx)->priv;
-   //printf("refcounted  :%d\n", logo_frame->buf[0]);
-//logo_frame->pts=logo_frame->pts + logo_frame->pkt_duration;
- ret = av_buffersrc_add_frame(*logo_ctx, new_logo_frame);
-//ret = av_buffersrc_write_frame(*logo_ctx, logo_frame);
-//ret = av_buffersrc_add_frame_flags(*logo_ctx, new_logo_frame,AV_BUFFERSRC_FLAG_KEEP_REF);
- //                   ret = av_buffersrc_add_frame_flags(*logo_ctx, new_logo_frame,AV_BUFFERSRC_FLAG_KEEP_REF);
-
-                    if(ret < 0){
-                        printf("Error: av_buffersrc_add_frame failed\n");
-                        av_frame_unref(frame);
-//av_free(sw_frame->data[0]); 
-    av_frame_unref(new_logo_frame);
-av_frame_free(&new_logo_frame);
-logo_frame=NULL;
- av_packet_unref(pkt);
-        av_packet_unref(out_pkt);
-       
-                        av_frame_unref(sw_frame);
- //if(sw_frame!=NULL){
- //av_frame_free(&sw_frame);
-
-                        return ret;
-                    }
-                    // printf("logo_ctx_fifo size1  :%d\n", s->fifo->end-s->fifo->buffer);
-                    av_frame_unref(new_logo_frame);
-av_frame_free(&new_logo_frame);
-logo_frame=NULL;
-
- //logo_next_pts = logo_frame->pts + logo_frame->pkt_duration;
-                    //ret = av_buffersrc_close(logo_ctx, logo_frame->pts+logo_frame->pkt_duration, AV_BUFFERSRC_FLAG_PUSH);
-
-                    /* 发 null 也可以，但是不太正规。可能某些场景下会有问题
-                    ret = av_buffersrc_add_frame(logo_ctx, NULL);
-                    if(ret < 0){
-                        printf("Error: av_buffersrc_add_frame failed\n");
-                        return ret;
-                    }*/
-
-                   // av_frame_free(&new_logo_frame);
-                    
-                    ret = av_buffersrc_add_frame(*mainsrc_ctx, sw_frame);
-                    if(ret < 0){
-
- av_frame_unref(frame);
-//av_free(sw_frame->data[0]); 
-   av_frame_unref(sw_frame);
- av_packet_unref(pkt);
-        av_packet_unref(out_pkt);
-
-   //if(sw_frame!=NULL){
- //av_frame_free(&sw_frame);
-
-                        printf("Error: av_buffersrc_add_frame failed\n");
-                        return ret;
-                    }
-
-                    //logo_frame->pts=sw_frame->pts;
- //               av_freep(&frame->data[0]);
-               //av_free(sw_frame->data[0]);
- av_frame_unref(sw_frame);
-                //}
-                //
-                while(1){
-                ret = av_buffersink_get_frame(*resultsink_ctx, frame);
-                if( ret == AVERROR_EOF ){
-                    //没有更多的 AVFrame
-                    printf("no more avframe output \n");
-                    break;
-                }else if( ret == AVERROR(EAGAIN) ){
-
-
-                    //需要输入更多的 AVFrame
-                    printf("need more avframe input \n");
-   //av_free(frame->data[0]);
- av_frame_unref(frame);
- av_packet_unref(pkt);
-        av_packet_unref(out_pkt);
- //av_frame_unref(sw_frame);
-   //av_frame_free(&sw_frame);
-   //av_free(hw_frame->data[0]);
-    //av_frame_unref(hw_frame);
-    //av_frame_free(&hw_frame);
-                    return ret;
-                }
-
-
-
-               break; 
-
-                }
-//av_free(*tmp_buffer);
-
- //av_freep(&new_logo_frame->data[0]);
-   ///                 av_free(tmp_buffer);
-
-
-   //av_frame_free(&sw_frame);
-
-
-                //printf("logo_ctx_fifo size :%d\n", av_fifo_size(s->fifo));
-
-//frame->pts=current_pts;
-                //滤镜处理结束
-                //
-                //frame->width=sw_frame->width/2;
-                //frame->height=sw_frame->height/2;
-                //frame->format=AV_PIX_FMT_YUV420P;
-
 
 
 //frame->width=1918;
@@ -3078,7 +2877,7 @@ printf("now:%"PRId64"\n",current_timestap);
                     AVRational logo_fr = {0};
 AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg/doc/examples/laoflch-mc-log.png",&logo_tb,&logo_fr);
 //AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/home/laoflch/Documents/laoflch-mc-log22.png",&logo_tb,&logo_fr);
-    ret=push_video_to_rtsp_subtitle_logo(in_filename,0,3, subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,NULL);
+    ret=push_video_to_rtsp_subtitle_logo(in_filename,0,2, subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,NULL);
 
    
     return 0;
@@ -3520,6 +3319,8 @@ int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int vide
     AVOutputFormat *ofmt = NULL;
     AVFormatContext *ifmt_ctx = avformat_alloc_context(), *ofmt_ctx = NULL;
     AVBufferRef *hw_device_ctx =NULL;
+
+    //SwrContext *swr_ctx=NULL;
     AVPacket *pkt=av_packet_alloc();
     
     AVPacket *out_pkt=av_packet_alloc();
@@ -3550,6 +3351,14 @@ int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int vide
     //int frame_size=av_image_get_buffer_size((*logo_frame)->format,(*logo_frame)->width,(*logo_frame)->height,1);
                      
     //uint8_t* tmp_buffer=(uint8_t*)av_malloc(frame_size*sizeof(uint8_t)); 
+
+    //AVFilterContext **abuffersrc_ctx,**abuffersink_ctx=NULL;
+    AVFilterGraph **afilter_graph= (AVFilterGraph **)malloc(sizeof(AVFilterGraph *));
+    *afilter_graph=NULL;
+
+ AVFilterContext **abuffersrc_ctx=(AVFilterContext **)malloc(sizeof(AVFilterContext **));
+AVFilterContext **abuffersink_ctx = (AVFilterContext **)malloc(sizeof(AVFilterContext **));
+    char *afilters_descr=NULL;
 
 
     AVFrame *new_logo_frame=av_frame_alloc();
@@ -3621,6 +3430,9 @@ int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int vide
      * */
     int (*handle_audio_codec)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *,int); 
 
+    /*音频滤镜处理函数
+      */
+    int (*handle_audio_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *,int,AVFilterContext **, AVFilterContext **,AVFilterGraph **,char *afilter_desrc);  
     /*帧输出处理函数
      * */
     int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *);  
@@ -3641,7 +3453,9 @@ int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int vide
 
     //handle_video_complex_filter=complex_filter_video_codec_func;
     //handle_video_complex_filter=subtitle_logo_video_codec_func;
-   handle_video_complex_filter=subtitle_logo_native_video_codec_func;
+    handle_video_complex_filter=subtitle_logo_native_video_codec_func;
+
+    handle_audio_complex_filter=complex_filter_audio_codec_func;
 
     ifmt_ctx->interrupt_callback=int_cb;
 
@@ -3851,22 +3665,29 @@ enc_ctx->pix_fmt = input_streams[nb_input_streams-1]->dec_ctx->pix_fmt;
          //enc_ctx->codec->capabilities=AV_CODEC_CAP_VARIABLE_FRAME_SIZE; 
           
             enc_ctx->channels=av_get_channel_layout_nb_channels(enc_ctx->channel_layout);
+            //enc_ctx->channels=dec_ctx->channels;
+
+            //enc_ctx->channel_layout=av_get_default_channel_layout(enc_ctx->channels);
+            //
+            //enc_ctx->channel_layout=dec_ctx->channel_layout; 
             //enc_ctx->time_base = (AVRational){1,enc_ctx->sample_rate};
             enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
 
-printf("audio stream time base:{%d %d}\n",enc_ctx->time_base.den,enc_ctx->time_base.num);
-            enc_ctx->sample_fmt=output_stream->enc_ctx->codec->sample_fmts[0];
-           enc_ctx->strict_std_compliance=-2;
-
+printf("audio stream time base:{%d %d} sample_rate:%d channel_layout:%d channels:%d\n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->sample_rate,enc_ctx->channel_layout,enc_ctx->channels);
+            //enc_ctx->sample_fmt=output_stream->enc_ctx->codec->sample_fmts[0];
+            enc_ctx->strict_std_compliance=-2;
+            enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
            //enc_ctx->frame_size=1536; 
            //printf("dec frame size:%d enc frame size:%d",input_streams[nb_input_streams-1]->dec_ctx->frame_size,enc_ctx->frame_size);
            //printf("cap:%d \n",enc_ctx->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE);
 
            if (((enc_ctx->codec->capabilities & AV_CODEC_CAP_VARIABLE_FRAME_SIZE)==0) && (input_streams[nb_input_streams-1]->dec_ctx->frame_size!=enc_ctx->frame_size)){
             // printf("######################\n");
-           output_stream->audio_fifo=av_audio_fifo_alloc(enc_ctx->sample_fmt, enc_ctx->channels, 1);
+           output_stream->audio_fifo=av_audio_fifo_alloc(7,av_get_channel_layout_nb_channels(input_streams[nb_input_streams-1]->dec_ctx->channel_layout) , 1);
            }//av_opt_set(enc_ctx->priv_data, "2", "", 0);
 
+           afilters_descr="aresample=48000,aformat=sample_fmts=fltp:channel_layouts=7.1";
+           //afilters_descr="aresample=48000";
 
 
         }else{
@@ -3891,6 +3712,9 @@ printf("audio stream time base:{%d %d}\n",enc_ctx->time_base.den,enc_ctx->time_b
             fprintf(stderr, "Failed to copy codec parameters\n");
             return ret;
         }
+
+
+
    if (in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
                //printf("enc_ctx frame_size:%d",enc_ctx->frame_size);
 
@@ -3930,6 +3754,10 @@ printf("audio stream time base:{%d %d}\n",enc_ctx->time_base.den,enc_ctx->time_b
         goto end;
     }
 
+ //if (in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+
+//printf("audio stream time sample_fmt:%d  sample_rate:%d channel_layout:%d channels:%d\n",ofmt_ctx->streams[1]->codecpar->format,ofmt_ctx->streams[1]->codecpar->sample_rate,ofmt_ctx->streams[1]->codecpar->channel_layout,ofmt_ctx->streams[1]->codecpar->channels);
+ //}
     AVStream *in_stream, *out_stream;
     InputStream *ist;
 
@@ -4075,7 +3903,9 @@ continue;
     }
  //log_packet(ifmt_ctx,pkt , "in_3");
         //if (0){
-            ret=(*handle_audio_codec)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,audio_pts);
+   //         ret=(*handle_audio_codec)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,audio_pts);
+ //处理滤镜 
+          ret=(*handle_audio_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,audio_pts,abuffersrc_ctx,abuffersink_ctx,afilter_graph,afilters_descr );
 
  /*if (pkt->data!=NULL) {
       av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
@@ -4178,7 +4008,7 @@ end:
  */
 int init_audio_output_frame(AVFrame **frame,
                                    AVCodecContext *occtx,
-                                   int frame_size)
+                                   int frame_size,enum AVSampleFormat sample_fmt)
 {
     int error;
 
@@ -4196,7 +4026,7 @@ int init_audio_output_frame(AVFrame **frame,
      * are assumed for simplicity. */
     (*frame)->nb_samples     = frame_size;
     (*frame)->channel_layout = occtx->channel_layout;
-    (*frame)->format         = occtx->sample_fmt;
+    (*frame)->format         = sample_fmt;
     (*frame)->sample_rate    = occtx->sample_rate;
 
     /* Allocate the samples of the created frame. This call will make
@@ -4220,27 +4050,32 @@ int write_frame_to_audio_fifo(AVAudioFifo *fifo,
                                      uint8_t **new_data,
                                      int new_size)
 {
+
+    //if (**new_data!=0){
     int ret = av_audio_fifo_realloc(fifo, av_audio_fifo_size(fifo) + new_size);
     if (ret < 0)
     {
         fprintf(stderr, "Could not reallocate FIFO\n");
         return ret;
     }
-    
-    /* Store the new samples in the FIFO buffer. */
+        /* Store the new samples in the FIFO buffer. */
     ret = av_audio_fifo_write(fifo, (void **)new_data, new_size);
+ printf("TTTTTTTTTTTTTTTTTTTTTTTTTTTT%d\n",fifo); 
+
+
     if (ret < new_size)
     {
         fprintf(stderr, "Could not write data to FIFO\n");
         return AVERROR_EXIT;
     }
-
     return ret;
+    //}
+    //return 0;
 }
 
 int read_frame_from_audio_fifo(AVAudioFifo *fifo,
                                       AVCodecContext *occtx,
-                                      AVFrame **frame)
+                                      AVFrame **frame,enum AVSampleFormat sample_fmt)
 {
     AVFrame *output_frame;
     // 如果FIFO中可读数据多于编码器帧大小，则只读取编码器帧大小的数据出来
@@ -4249,7 +4084,7 @@ int read_frame_from_audio_fifo(AVAudioFifo *fifo,
 
     /* Initialize temporary storage for one output frame. */
     // 分配AVFrame及AVFrame数据缓冲区
-    int ret = init_audio_output_frame(&output_frame, occtx, frame_size);
+    int ret = init_audio_output_frame(&output_frame, occtx, frame_size,sample_fmt);
     if (ret < 0)
     {
         return AVERROR_EXIT;
@@ -4638,89 +4473,287 @@ void filter_rgba( const AVFrame *frame,
         }
     }
 }
-/*int ff_fill_rgba_map(uint8_t *rgba_map, enum AVPixelFormat pix_fmt)
-{*/
-   /* const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
-    if (!(desc->flags & AV_PIX_FMT_FLAG_RGB))
-        return AVERROR(EINVAL);
-    if (desc->flags & AV_PIX_FMT_FLAG_BITSTREAM)
-        return AVERROR(EINVAL);
-    //av_assert0(desc->nb_components == 3 + !!(desc->flags & AV_PIX_FMT_FLAG_ALPHA));
-    if (desc->flags & AV_PIX_FMT_FLAG_PLANAR) {
-        rgba_map[R]   = desc->comp[0].plane;
-        rgba_map[G] = desc->comp[1].plane;
-        rgba_map[B]  = desc->comp[2].plane;
-        rgba_map[A] = (desc->flags & AV_PIX_FMT_FLAG_ALPHA) ? desc->comp[3].plane : 3;
-    } else {
-        int had0 = 0;
-        unsigned depthb = 0;
-        unsigned i;
-        for (i = 0; i < desc->nb_components; i++) {
-            // all components must have same depth in bytes 
-            unsigned db = (desc->comp[i].depth + 7) / 8;
-            unsigned pos = desc->comp[i].offset / db;
-            if (depthb && (depthb != db))
-                return AVERROR(ENOSYS);
 
-            if (desc->comp[i].offset % db)
-                return AVERROR(ENOSYS);
 
-            had0 |= pos == 0;
-            rgba_map[i] = pos;
-        }
+int audio_resample(AVFrame *frame, SwrContext **swr_ctx,const int in_sample_rate ,const enum AVSampleFormat in_sfmt,const uint64_t in_channel_layout,const int in_channels,const int in_nb_samples ,const int out_sample_rate ,const enum AVSampleFormat out_sfmt,const int64_t out_channel_layout){
 
-        if (desc->nb_components == 3)
-            rgba_map[A] = had0 ? 3 : 0;
+  //int in_nb_samples=frame->nb
+  //int in_spb=av_get_bytes_per_sample(in_spb);
+    int out_channels=av_get_channel_layout_nb_channels(out_channel_layout);
+
+    int out_nb_samples=av_rescale_rnd(in_nb_samples,out_sample_rate,in_sample_rate,AV_ROUND_UP) ;
+
+  //int out_spb=av_get_bytes_per_sample(out_sfmt);
+
+  //AVFrame *in_frame=av_frame_alloc();
+  //av_samples_alloc(in_frame->data,in_frame->linesize,in_channels,in_nb_samples,in_sfmt,1);
+    AVFrame *out_frame=av_frame_alloc();
+    av_samples_alloc(out_frame->data,out_frame->linesize,out_channels,out_nb_samples,out_sfmt,1);
+
+
+  //SwrContext *swr_ctx=NULL;
+  //
+    if ((*swr_ctx)==NULL){
+
+         *swr_ctx=swr_alloc_set_opts(*swr_ctx,out_channel_layout,out_sfmt,out_sample_rate,in_channel_layout,in_sfmt,in_sample_rate,0,NULL);
+
+        if (swr_init(*swr_ctx)<0){
+
+          av_log(swr_ctx,AV_LOG_DEBUG,"init swr fail!");
+
+        };
+     }
+  //int buf_len=in_spb*in_channels*in_nb_samples;
+
+  //void *buf=av_malloc(buf_len);
+
+     //int frameCnt=0;
+
+     int dst_nb_samples=av_rescale_rnd(swr_get_delay(*swr_ctx,in_sample_rate)+in_nb_samples,out_sample_rate,in_sample_rate,AV_ROUND_UP);
+
+     if(dst_nb_samples>out_nb_samples){
+         av_frame_unref(out_frame);
+         out_nb_samples=dst_nb_samples;
+         av_samples_alloc(out_frame->data,out_frame->linesize,out_channels,out_nb_samples,out_sfmt,1);
+     };
+printf("]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]%d\n",frame->data[0]);
+       //int ret;
+     int ret=swr_convert(*swr_ctx,out_frame->extended_data,out_nb_samples,(const uint8_t **)frame->extended_data,frame->nb_samples);
+
+     if(ret<0){
+
+        av_log(swr_ctx,AV_LOG_DEBUG,"swr audio frame fail");
+
+        goto err;
+
+     }
+
+     frame=out_frame; 
+
+
+err:
+     av_frame_free(&out_frame);
+     swr_free(swr_ctx);
+
+     return ret;
+
+end:
+     av_frame_free(&out_frame);
+     swr_free(swr_ctx);
+
+     return 0;
+}
+
+static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx_point, AVFilterContext **buffersrc_ctx_point ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base)
+{
+    char args[512];
+    int ret = 0;
+    const AVFilter *abuffersrc  = avfilter_get_by_name("abuffer");
+    const AVFilter *abuffersink = avfilter_get_by_name("abuffersink");
+    AVFilterContext *buffersrc_ctx;
+    AVFilterContext *buffersink_ctx;
+    AVFilterInOut *outputs = avfilter_inout_alloc();
+    AVFilterInOut *inputs  = avfilter_inout_alloc();
+    static const enum AVSampleFormat out_sample_fmts[] = { AV_SAMPLE_FMT_FLTP, -1 };
+    static const int64_t out_channel_layouts[] = { AV_CH_LAYOUT_7POINT1,-1 };
+    static const int out_sample_rates[] = { 48000, -1 };
+    const AVFilterLink *outlink;
+    //AVRational time_base = fmt_ctx->streams[audio_stream_index]->time_base;
+    AVFilterGraph *filter_graph = avfilter_graph_alloc();
+    if (!outputs || !inputs || !filter_graph) {
+        ret = AVERROR(ENOMEM);
+        goto end;
     }
 
-    //av_assert0(rgba_map[R]   != rgba_map[G]);
-    //av_assert0(rgba_map[G] != rgba_map[B]);
-    //av_assert0(rgba_map[B]  != rgba_map[R]);
-    //av_assert0(rgba_map[R]   != rgba_map[A]);
-    //av_assert0(rgba_map[G] != rgba_map[A]);
-    //av_assert0(rgba_map[B]  != rgba_map[A]);
+    *filter_graph_point=filter_graph;
 
-    return 0;*/
+    /* buffer audio source: the decoded frames from the decoder will be inserted here. */
+    if (!dec_ctx->channel_layout)
+        dec_ctx->channel_layout = av_get_default_channel_layout(dec_ctx->channels);
+    snprintf(args, sizeof(args),
+            "time_base=%d/%d:sample_rate=%d:sample_fmt=%s:channel_layout=0x%"PRIx64,
+             time_base.num, time_base.den, dec_ctx->sample_rate,
+             av_get_sample_fmt_name(7), dec_ctx->channel_layout);
 
-   /* switch (pix_fmt) {
-    case AV_PIX_FMT_0RGB:
-    case AV_PIX_FMT_ARGB:  rgba_map[ALPHA] = 0; rgba_map[RED  ] = 1; rgba_map[GREEN] = 2; rgba_map[BLUE ] = 3; break;
-    case AV_PIX_FMT_0BGR:
-    case AV_PIX_FMT_ABGR:  rgba_map[ALPHA] = 0; rgba_map[BLUE ] = 1; rgba_map[GREEN] = 2; rgba_map[RED  ] = 3; break;
-    case AV_PIX_FMT_RGB48LE:
-    case AV_PIX_FMT_RGB48BE:
-    case AV_PIX_FMT_RGBA64BE:
-    case AV_PIX_FMT_RGBA64LE:
-    case AV_PIX_FMT_RGB0:
-    case AV_PIX_FMT_RGBA:
-    case AV_PIX_FMT_RGB24: rgba_map[RED  ] = 0; rgba_map[GREEN] = 1; rgba_map[BLUE ] = 2; rgba_map[ALPHA] = 3; break;
-    case AV_PIX_FMT_BGR48LE:
-    case AV_PIX_FMT_BGR48BE:
-    case AV_PIX_FMT_BGRA64BE:
-    case AV_PIX_FMT_BGRA64LE:
-    case AV_PIX_FMT_BGRA:
-    case AV_PIX_FMT_BGR0:
-    case AV_PIX_FMT_BGR24: rgba_map[BLUE ] = 0; rgba_map[GREEN] = 1; rgba_map[RED  ] = 2; rgba_map[ALPHA] = 3; break;
-    case AV_PIX_FMT_GBRP9LE:
-    case AV_PIX_FMT_GBRP9BE:
-    case AV_PIX_FMT_GBRP10LE:
-    case AV_PIX_FMT_GBRP10BE:
-    case AV_PIX_FMT_GBRP12LE:
-    case AV_PIX_FMT_GBRP12BE:
-    case AV_PIX_FMT_GBRP14LE:
-    case AV_PIX_FMT_GBRP14BE:
-    case AV_PIX_FMT_GBRP16LE:
-    case AV_PIX_FMT_GBRP16BE:
-    case AV_PIX_FMT_GBRAP:
-    case AV_PIX_FMT_GBRAP10LE:
-    case AV_PIX_FMT_GBRAP10BE:
-    case AV_PIX_FMT_GBRAP12LE:
-    case AV_PIX_FMT_GBRAP12BE:
-    case AV_PIX_FMT_GBRAP16LE:
-    case AV_PIX_FMT_GBRAP16BE:
-    case AV_PIX_FMT_GBRP:  rgba_map[GREEN] = 0; rgba_map[BLUE ] = 1; rgba_map[RED  ] = 2; rgba_map[ALPHA] = 3; break;
-    default:                    // unsupported 
-        return AVERROR(EINVAL);
+    ret = avfilter_graph_create_filter(&buffersrc_ctx, abuffersrc, "in",
+                                       args, NULL, filter_graph);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Cannot create audio buffer source\n");
+        goto end;
     }
-    return 0;
-}*/
+
+    /* buffer audio sink: to terminate the filter chain. */
+    ret = avfilter_graph_create_filter(&buffersink_ctx, abuffersink, "out",
+                                       NULL, NULL, filter_graph);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Cannot create audio buffer sink\n");
+        goto end;
+    }
+
+
+    ret = av_opt_set_int_list(buffersink_ctx, "sample_fmts", out_sample_fmts, -1,
+                              AV_OPT_SEARCH_CHILDREN);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Cannot set output sample format\n");
+        goto end;
+    }
+
+    ret = av_opt_set_int_list(buffersink_ctx, "channel_layouts", out_channel_layouts, -1,
+                              AV_OPT_SEARCH_CHILDREN);
+
+
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Cannot set output channel layout\n");
+        goto end;
+    }
+
+    ret = av_opt_set_int_list(buffersink_ctx, "sample_rates", out_sample_rates, -1,
+                              AV_OPT_SEARCH_CHILDREN);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_ERROR, "Cannot set output sample rate\n");
+        goto end;
+    }
+
+
+    /*
+     * Set the endpoints for the filter graph. The filter_graph will
+     * be linked to the graph described by filters_descr.
+     */
+
+    /*
+     * The buffer source output must be connected to the input pad of
+     * the first filter described by filters_descr; since the first
+     * filter input label is not specified, it is set to "in" by
+     * default.
+     */
+    outputs->name       = av_strdup("in");
+    outputs->filter_ctx = buffersrc_ctx;
+    outputs->pad_idx    = 0;
+    outputs->next       = NULL;
+
+    /*
+     * The buffer sink input must be connected to the output pad of
+     * the last filter described by filters_descr; since the last
+     * filter output label is not specified, it is set to "out" by
+     * default.
+     */
+    inputs->name       = av_strdup("out");
+    inputs->filter_ctx = buffersink_ctx;
+    inputs->pad_idx    = 0;
+    inputs->next       = NULL;
+
+
+    if ((ret = avfilter_graph_parse_ptr(filter_graph, filters_descr,
+                                        &inputs, &outputs, NULL)) < 0)
+        goto end;
+
+    if ((ret = avfilter_graph_config(filter_graph, NULL)) < 0)
+        goto end;
+
+    *buffersrc_ctx_point=buffersrc_ctx;
+    *buffersink_ctx_point=buffersink_ctx;
+
+    /* Print summary of the sink buffer
+     * Note: args buffer is reused to store channel layout string */
+    outlink = buffersink_ctx->inputs[0];
+    av_get_channel_layout_string(args, sizeof(args), -1, outlink->channel_layout);
+    av_log(NULL, AV_LOG_INFO, "Output: srate:%dHz fmt:%s chlayout:%s\n",
+           (int)outlink->sample_rate,
+           (char *)av_x_if_null(av_get_sample_fmt_name(outlink->format), "?"),
+           args);
+
+end:
+    avfilter_inout_free(&inputs);
+    avfilter_inout_free(&outputs);
+
+    return ret;
+}
+
+
+int filter_audio_frame(AVFrame *frame,AVFilterContext *buffersink_ctx, AVFilterContext *buffersrc_ctx)
+{
+
+
+    int ret;
+   // AVPacket packet;
+   // AVFrame *frame = av_frame_alloc();
+    //AVFrame *filt_frame = av_frame_alloc();
+
+    //if (!frame || !filt_frame) {
+     //   perror("Could not allocate frame");
+      //  exit(1);
+    //}
+    //if (argc != 2) {
+     //   fprintf(stderr, "Usage: %s file | %s\n", argv[0], player);
+      //  exit(1);
+    //}
+
+    //if ((ret = open_input_file(argv[1])) < 0)
+     //   goto end;
+    //if ((ret = init_filters(filter_descr)) < 0)
+     //   goto end;
+
+    /* read all packets */
+    /*while (1) {
+        if ((ret = av_read_frame(fmt_ctx, &packet)) < 0)
+            break;
+
+        if (packet.stream_index == audio_stream_index) {
+            ret = avcodec_send_packet(dec_ctx, &packet);
+            if (ret < 0) {
+                av_log(NULL, AV_LOG_ERROR, "Error while sending a packet to the decoder\n");
+                break;
+            }
+
+            while (ret >= 0) {
+                ret = avcodec_receive_frame(dec_ctx, frame);
+                if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                    break;
+                } else if (ret < 0) {
+                    av_log(NULL, AV_LOG_ERROR, "Error while receiving a frame from the decoder\n");
+                    goto end;
+                }
+
+                if (ret >= 0) {*/
+                    /* push the audio data from decoded frame into the filtergraph */
+printf("234666666666666666666%d\n",buffersrc_ctx);
+
+                    if (av_buffersrc_add_frame_flags(buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                        av_log(NULL, AV_LOG_ERROR, "Error while feeding the audio filtergraph\n");
+                                         }
+
+
+ av_frame_unref(frame);
+
+                    /* pull filtered audio from the filtergraph */
+                    while (1) {
+                        ret = av_buffersink_get_frame(buffersink_ctx, frame);
+                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+                            break;
+                        if (ret < 0)
+                            goto end;
+                     //   print_frame(filt_frame);
+                      //  av_frame_unref(filt_frame);
+                    }
+           /*end:
+    avfilter_graph_free(&filter_graph);
+    avcodec_free_context(&dec_ctx);
+    avformat_close_input(&fmt_ctx);
+    av_frame_free(&frame);
+    av_frame_free(&filt_frame);
+
+    if (ret < 0 && ret != AVERROR_EOF) {
+        fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
+        exit(1);
+    }
+
+    exit(0);
+    */
+err:
+
+    return ret;
+
+end:
+    return 0; 
+}
+

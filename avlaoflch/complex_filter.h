@@ -14,6 +14,7 @@
 #include <libavutil/audio_fifo.h>
 #include <libavformat/avformat.h>
 #include <libavfilter/avfilter.h>
+#include <libswresample/swresample.h>
 #include "drawutils.h"
 
 #include <stdio.h>
@@ -405,7 +406,7 @@ VideoHandleProcessInfo *video_handle_process_info_alloc();
 
 int read_frame_from_audio_fifo(AVAudioFifo *fifo,
                                       AVCodecContext *occtx,
-                                      AVFrame **frame);
+                                      AVFrame **frame,enum AVSampleFormat);
 int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef *hw_device_ctx);
 
 int hw_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping);
@@ -432,4 +433,8 @@ int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base);
 static int attachment_is_font(AVStream * st);
 static void overlay_ass_image(AssContext *ass, AVFrame *picref,
                               const ASS_Image *image);
+
+int audio_resample(AVFrame *frame, SwrContext **swr_ctx,const int in_sample_rate ,const enum AVSampleFormat in_sfmt,const uint64_t in_channel_layout,const int in_channels,const int in_nb_samples ,const int out_sample_rate ,const enum AVSampleFormat out_sfmt,const int64_t out_channel_layout);
+static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base);
+int filter_audio_frame(AVFrame *frame,AVFilterContext *buffersink_ctx, AVFilterContext *buffersrc_ctx);
 #endif /*COMPLEX_FILTER_LAOFLCH_H*/
