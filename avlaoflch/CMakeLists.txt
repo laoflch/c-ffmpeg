@@ -33,3 +33,5 @@ add_executable(ComplexFilter complex_filter.c drawutils.c )
 target_link_libraries(ComplexFilter ${FFMPEG_LIB})
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/complex_filter.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/drawutils.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)

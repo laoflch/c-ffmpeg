@@ -385,12 +385,31 @@ typedef struct Fade2Context {
     int black_fade;         ///< if color_rgba is black
 } Fade2Context;
 
-typedef struct VideoHandleProcessInfo {
-     uint64_t total_frames;
-     uint64_t pass_frames;
+typedef struct TaskHandleProcessInfo {
+
+
+     /*input process info*/
+     int64_t bit_rate; 
+     //enum  code_id;
+     enum AVCodecID video_codec_id;
+
+     int width,height;    
+
+
+     int audio_channels;
+     uint64_t audio_channel_layout;
+     enum AVCodecID audio_codec_id;
+      
+
+
+
+     /*result info*/
+     int64_t total_duration;
+     int64_t pass_duration;
 
      float handled_rate;
-} VideoHandleProcessInfo;
+
+} TaskHandleProcessInfo;
 
 
 static void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams);
@@ -401,8 +420,12 @@ int write_frame_to_audio_fifo(AVAudioFifo *fifo,
 
 AVFrame* get_frame_from_jpeg_or_png_file2(const char *filename,AVRational *logo_tb,AVRational *logo_fr);
 
-VideoHandleProcessInfo *video_handle_process_info_alloc();
+TaskHandleProcessInfo *task_handle_process_info_alloc();
+void task_handle_process_info_free(TaskHandleProcessInfo *);
 
+//void set_video_handle_process_info_code_id(VideoHandleProcessInfo *,int );
+//void set_video_handle_process_info_size(int ,int );
+//void set_video_handle_process_info_bit_rate(int64_t );
 
 int read_frame_from_audio_fifo(AVAudioFifo *fifo,
                                       AVCodecContext *occtx,
@@ -424,7 +447,7 @@ int subtitle_logo_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *fram
 int subtitle_logo_video_codec_func2(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des );
 
 static void *grow_array(void *array, int elem_size, int *size, int new_size);
-int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,VideoHandleProcessInfo **video_handle_process);
+int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo **task_handle_process);
 
 int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames);
 
@@ -436,6 +459,15 @@ static void overlay_ass_image(AssContext *ass, AVFrame *picref,
                               const ASS_Image *image);
 
 int audio_resample(AVFrame *frame, SwrContext **swr_ctx,const int in_sample_rate ,const enum AVSampleFormat in_sfmt,const uint64_t in_channel_layout,const int in_channels,const int in_nb_samples ,const int out_sample_rate ,const enum AVSampleFormat out_sfmt,const int64_t out_channel_layout);
-static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base);
+static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base,AVCodecContext *enc_ctx);
 int filter_audio_frame(AVFrame *frame,AVFilterContext *buffersink_ctx, AVFilterContext *buffersrc_ctx);
+
+
+
+
+
+
+
+
+
 #endif /*COMPLEX_FILTER_LAOFLCH_H*/
