@@ -385,6 +385,15 @@ typedef struct Fade2Context {
     int black_fade;         ///< if color_rgba is black
 } Fade2Context;
 
+typedef struct TaskHandleProcessControl {
+     bool task_cancel; //ffmpeg 运行任务是否取消
+
+
+
+
+} TaskHandleProcessControl;
+
+
 typedef struct TaskHandleProcessInfo {
 
 
@@ -400,8 +409,7 @@ typedef struct TaskHandleProcessInfo {
      uint64_t audio_channel_layout;
      enum AVCodecID audio_codec_id;
       
-
-
+     TaskHandleProcessControl *control;
 
      /*result info*/
      int64_t total_duration;
@@ -410,6 +418,9 @@ typedef struct TaskHandleProcessInfo {
      float handled_rate;
 
 } TaskHandleProcessInfo;
+
+
+
 
 
 static void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams);
@@ -432,7 +443,7 @@ int read_frame_from_audio_fifo(AVAudioFifo *fifo,
                                       AVFrame **frame,enum AVSampleFormat);
 int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef *hw_device_ctx);
 
-int hw_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams);
+int hw_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams);
 
 int simple_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams);
 
