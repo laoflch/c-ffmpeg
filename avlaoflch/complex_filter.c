@@ -3822,7 +3822,7 @@ printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" p
 
 
 
-printf("################################4\n");
+//printf("################################4\n");
         //out_pkt->pos=origin_pos;
          //printf("########77777########%d %d\n",out_pkt->stream_index,stream_mapping[out_pkt->stream_index]);
       //av_packet_rescale_ts(out_pkt,in_stream->time_base, out_stream->time_base);
@@ -5437,8 +5437,8 @@ AVFilterContext **abuffersink_ctx = (AVFilterContext **)av_malloc(sizeof(AVFilte
     AVDictionary* options = NULL;
  
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "8388608", 0);
-    av_dict_set(&options, "max_delay", "5000000", 0);
+    //av_dict_set(&options, "buffer_size", "8388608", 0);
+    //av_dict_set(&options, "max_delay", "5000000", 0);
     //av_opt_set(ofmt_ctx->priv_data,"rtsp_transport","tcp",0);
 
     //ofmt_ctx->max_interleave_delta = 10000000;
@@ -6023,14 +6023,27 @@ end:
     //av_freep(hw_device_ctx);
 
     //av_freep(stream_mapping);
-    avfilter_free(*mainsrc_ctx);
+    //
+    //
+    //AVFilterContext* tmp=*mainsrc_ctx;
+
+    //printf("free avfilter 1-1 %d\n",tmp);
+
+    if(ret!=AVERROR(ECONNREFUSED)){
+
+        avfilter_free(*mainsrc_ctx);
+       
    // av_freep(mainsrc_ctx);
  
-
-    avfilter_free(*logo_ctx);
+  
+        avfilter_free(*logo_ctx);
     //av_freep(logo_ctx);
-    avfilter_free(*resultsink_ctx);
+    
+
+
+        avfilter_free(*resultsink_ctx);
     //av_freep(resultsink_ctx);
+    }
 
     avfilter_free(*abuffersrc_ctx);
 //printf("free memery\n");
@@ -6050,7 +6063,7 @@ end:
 
     if (ret < 0 && ret != AVERROR_EOF) {
         fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
-        return 1;
+        return ret;
     }
 
     return 0;
