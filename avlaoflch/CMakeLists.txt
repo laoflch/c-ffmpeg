@@ -5,10 +5,13 @@ set(FFMPEG_LIB_PREFIX /workspace/ffmpeg/lib)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavcodec.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavutil.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavfilter.so)
+list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavfilter.a)
+list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libswscale.so.5)
+
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavformat.so)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libswresample.so)
 list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libass.so.5)
-
+#list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libm.so.6)
 
 
 #aux_source_directory(/workspace/ffmpeg/lib DIR_LIB_FFMPEG)
@@ -25,13 +28,19 @@ target_link_libraries(avlaoflch ${FFMPEG_LIB})
 
 #list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libavcodec.so)
 include_directories(/workspace/ffmpeg/FFmpeg)
-add_executable(ComplexFilter complex_filter.c drawutils.c )
+#include_directories(complex_filter.h)
+#include_directories(subtitle.h)
+
+#add_executable(ComplexFilter complex_filter.c drawutils.c )
+add_executable(PushStream push_stream.c complex_filter.c subtitle.c) 
 
 #target_link_directories(ComplexFilter PUBLIC  /workspace/ffmpeg/lib )
 
 #target_link_libraries(ComplexFilter /workspace/ffmpeg/lib/libavcodec.so /workspace/ffmpeg/lib/libavutil.so /workspace/ffmpeg/lib/libavfilter.so /workspace/ffmpeg/lib/libavformat.so  ${libavlaoflch})
-target_link_libraries(ComplexFilter ${FFMPEG_LIB})
-
+#target_link_libraries(ComplexFilter ${FFMPEG_LIB})
+target_link_libraries(PushStream ${FFMPEG_LIB})
+#target_link_libraries(PushStream avlaoflch)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/complex_filter.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)
-
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/push_stream.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/subtitle.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/drawutils.h DESTINATION ${CMAKE_BINARY_DIR}/avlaoflch)

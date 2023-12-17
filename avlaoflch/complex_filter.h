@@ -13,9 +13,11 @@
 #include <libavutil/time.h>//必须引入，否则返回值int64_t无效，默认返回int,则会出现负值情况
 #include <libavutil/audio_fifo.h>
 #include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
 #include <libavfilter/avfilter.h>
 #include <libswresample/swresample.h>
 #include "drawutils.h"
+#include "subtitle.h"
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -40,6 +42,8 @@ typedef struct AssContext {
     int     pix_step[4];       ///< steps per pixel for each plane of the main output
     int original_w, original_h;
     int shaping;
+    AVFrame *empty_layout_frame;  
+    AVFrame *empty_layout_frame_little;  
     FFDrawContext draw;
 } AssContext;
 
@@ -136,7 +140,12 @@ typedef struct FilterGraph {
 
     char *subtitle_path;
     AssContext *ass;
+    OverlayContext *overlay_ctx;
+    SubtitleFrame *sub_frame;
+    //enum SubtitleType sub_type;
+    int subtitle_stream_index;
 
+    AVCodecContext *subtitle_dec_ctx;
     bool if_hw;
 
     bool if_fade;
@@ -423,7 +432,7 @@ typedef struct TaskHandleProcessInfo {
 
 
 
-static void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams);
+void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams);
 
 int write_frame_to_audio_fifo(AVAudioFifo *fifo,
                                      uint8_t **new_data,
@@ -433,6 +442,17 @@ AVFrame* get_frame_from_jpeg_or_png_file2(const char *filename,AVRational *logo_
 
 TaskHandleProcessInfo *task_handle_process_info_alloc();
 void task_handle_process_info_free(TaskHandleProcessInfo *);
+
+/*static int decode_interrupt_cb(void *ctx)
+{
+
+    printf("intrrupt for input steam");
+    return 0;
+
+}
+*/
+extern const AVIOInterruptCB int_cb ;
+
 
 //void set_video_handle_process_info_code_id(VideoHandleProcessInfo *,int );
 //void set_video_handle_process_info_size(int ,int );
@@ -457,13 +477,13 @@ int subtitle_logo_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *fram
 
 int subtitle_logo_video_codec_func2(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des );
 
-static void *grow_array(void *array, int elem_size, int *size, int new_size);
+void *grow_array(void *array, int elem_size, int *size, int new_size);
 int push_video_to_rtsp_subtitle_logo(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process);
 
 int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames);
 
-static av_cold int init(AssContext *ass);
-static av_cold int init_subtitles( AssContext *ass );
+av_cold int init(AssContext *ass);
+av_cold int init_subtitles( AssContext *ass );
 int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base);
 static int attachment_is_font(AVStream * st);
 static void overlay_ass_image(AssContext *ass, AVFrame *picref,
@@ -474,11 +494,15 @@ static int init_audio_filters(const char *filters_descr,AVFilterContext **buffer
 int filter_audio_frame(AVFrame *frame,AVFilterContext *buffersink_ctx, AVFilterContext *buffersrc_ctx);
 
 
+int subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams );
 
+/*
+ * 只使用音频滤镜对不同音频格式进行转换,与不带only的音频滤镜不同的地方就是不预先根据frame_size的大小,对frame进行裁剪,而是通过buffersink设置frame_size自动处理。
+ *
+ */
+uint64_t complex_filter_audio_codec_func_only(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping, uint64_t s_pts,OutputStream **output_streams,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph,char *afilter_desrc);
 
-
-
-
+OutputStream *new_output_stream(AVFormatContext *oc,  int output_stream_index,bool hw,int codec_type,enum AVCodecID codec_id,OutputStream **output_streams );
 
 
 #endif /*COMPLEX_FILTER_LAOFLCH_H*/

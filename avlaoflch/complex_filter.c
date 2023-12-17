@@ -42,6 +42,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavfilter/buffersink.h>
 //#include <libavfilter/drawutils.h>
+#include <libavutil/imgutils.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -51,6 +52,7 @@
 #include <libavutil/hwcontext.h>
 #include <libavutil/parseutils.h>
 #include "complex_filter.h"
+#include "subtitle.h"
 //#define have_clock_gettime 1
 //#include <sys/time.h> //需要引入sys/time.h的库文件，不然av_gettime_relative返回的时间长度大于int64_t，将返回付值,相减会出现混乱
 //#include "ffmpeg.h"
@@ -86,7 +88,9 @@ static int decode_interrupt_cb(void *ctx)
     return 0;
 
 }
+
 const AVIOInterruptCB int_cb = { decode_interrupt_cb, NULL };
+
 
 //extern ff_vf_fade2;
 //extern void ff_draw_color(FFDrawContext *draw, FFDrawColor *color, const uint8_t rgba[4]);
@@ -119,7 +123,7 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
   return AV_PIX_FMT_NONE;
 
 }
-static void *grow_array(void *array, int elem_size, int *size, int new_size)
+void *grow_array(void *array, int elem_size, int *size, int new_size)
 {
     if (new_size >= INT_MAX / elem_size) {
         av_log(NULL, AV_LOG_ERROR, "Array too big.\n");
@@ -164,7 +168,7 @@ void task_handle_process_info_free(TaskHandleProcessInfo *info){
     av_free(info);
 
 };
-static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char *tag)
+void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char *tag)
 {
  
  //printf("#######224222##########\n");
@@ -183,7 +187,7 @@ static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, cons
 
 }
 
-static void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams )
+void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams )
 {
     int  ret;
 
@@ -336,7 +340,7 @@ static void add_input_streams( AVFormatContext *ic, int stream_index,int input_s
 
 }
 
-static OutputStream *new_output_stream(AVFormatContext *oc,  int output_stream_index,bool hw,int codec_type,enum AVCodecID codec_id,OutputStream **output_streams )
+OutputStream *new_output_stream(AVFormatContext *oc,  int output_stream_index,bool hw,int codec_type,enum AVCodecID codec_id,OutputStream **output_streams )
 {
     OutputStream *ost;
     //AVStream *st = avformat_new_stream(oc, NULL);
@@ -412,6 +416,8 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
     }
 
     ost->enc_ctx = avcodec_alloc_context3(ost->enc);
+
+
     if (!ost->enc_ctx) {
         fprintf(stderr, "Could not allocate video encodec context\n");
         return NULL; 
@@ -430,9 +436,9 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
     //    ost->enc = avcodec_find_encoder_by_name("h264_nvenc");
        ost->enc_ctx->thread_count=8;
    //av_log(ost->enc_ctx, AV_LOG_INFO, "codec capabilities:%d",ost->enc_ctx->codec->capabilities);
-       ost->enc_ctx->active_thread_type=FF_THREAD_FRAME;
+       ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
     }
-
+//printf("**********************************88 %d \n",ost);
 
     return ost;
 }
@@ -1460,10 +1466,10 @@ output_streams[stream_mapping[pkt->stream_index]]->frame_number++;
 
 }
 
-static int config_input(AssContext *ass, int format,int w,int h)
+int config_input(AssContext *ass, int format,int w,int h)
 {
     //AssContext *ass = inlink->dst->priv;
-
+//printf("alpha flags:%d\n",ass->alpha);
     ff_draw_init(&ass->draw, format, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
 
     ass_set_frame_size  (ass->renderer, w, h);
@@ -1751,7 +1757,7 @@ s_frame_pts=frame->pts;
                         filter_graph_des->ass->force_style=NULL;
                         filter_graph_des->ass->fontsdir=NULL;
                         filter_graph_des->ass->original_w=0;
-                        filter_graph_des->ass->alpha=0;
+                        filter_graph_des->ass->alpha=1;
                         init_subtitles(filter_graph_des->ass);
                         config_input(filter_graph_des->ass, AV_PIX_FMT_NV12,  (*enc_ctx)->width,(*enc_ctx)->height);
 
@@ -1931,6 +1937,8 @@ if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_pat
      frame->pts=s_frame_pts;
 //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@2%s \n",filter_graph_des->ass->filename);
      handle_subtitle(frame, filter_graph_des->ass, dec_ctx->time_base) ;
+    //handle_sub2();
+
 }
 
 //frame->pts=s_pts;
@@ -2329,7 +2337,9 @@ AVFilterContext *mainsrc_ctx_point,*logo_ctx_point,*resultsink_ctx_point ;
                         filter_graph_des->ass->original_w=0;
                         filter_graph_des->ass->alpha=0;
                         init_subtitles(filter_graph_des->ass);
-                        config_input(filter_graph_des->ass, AV_PIX_FMT_NV12,  (*enc_ctx)->width,(*enc_ctx)->height);
+
+                        //图像格式需要与fraph输出的标尺一致
+                        config_input(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
 
                     }
                 }
@@ -3853,7 +3863,7 @@ return ret;
 
 }
 
-static av_cold int init_subtitles( AssContext *ass )
+av_cold int init_subtitles( AssContext *ass )
 {
     int j, ret, sid;
     int k = 0;
@@ -4046,6 +4056,27 @@ end:
     return ret;
 }
 
+av_cold int init_ass(AssContext *ass)
+{
+    //AssContext *ass = ctx->priv;
+    int ret = init(ass);
+
+    if (ret < 0)
+        return ret;
+
+    /* Initialize fonts */
+    ass_set_fonts(ass->renderer, NULL, NULL, 1, NULL, 1);
+
+    ass->track = ass_read_file(ass->library, ass->filename, NULL);
+    if (!ass->track) {
+        av_log(ass, AV_LOG_ERROR,
+               "Could not create a libass track when reading file '%s'\n",
+               ass->filename);
+        return AVERROR(EINVAL);
+    }
+    return 0;
+}
+
 static const int ass_libavfilter_log_level_map[] = {
     [0] = AV_LOG_FATAL,     /* MSGL_FATAL */
     [1] = AV_LOG_ERROR,     /* MSGL_ERR */
@@ -4090,7 +4121,7 @@ static void ass_log(int ass_level, const char *fmt, va_list args, void *ctx)
     av_log(ctx, level, "\n");
 }
 
-static av_cold int init(AssContext *ass)
+av_cold int init(AssContext *ass)
 {
     //AssContext *ass = ctx->priv;
 
@@ -4285,7 +4316,25 @@ void ff_blend_mask(FFDrawContext *draw, FFDrawColor *color,
                       3, 0, image->dst_x, image->dst_y);
     }
 }
+ void overlay_ass_image2(AssContext *ass, AVFrame *picref,
+                              const ASS_Image *image)
+{
 
+
+
+         image_t  *img=gen_image(image->w, image->h);
+printf("gen_image:%d %d\n",img->buffer,image->h);
+         blend(img,image);
+         AVFrame *frame=av_frame_alloc();
+        frame->width=img->width;
+        frame->height=img->height;
+        frame->format=AV_PIX_FMT_RGBA;
+        av_image_fill_arrays(frame->data,frame->linesize,img->buffer,AV_PIX_FMT_RGBA,img->width,img->height,1);
+
+         //int linesize[4]={img->stride,0,0,0};
+         ff_copy_rectangle2(&ass->draw, picref->data, picref->linesize, frame->data, frame->linesize, 0, 0, 0, 0, frame->width, frame->height);
+
+   }
 int push_video_to_rtsp_subtitle_logo2(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
 
     InputStream **input_streams = NULL;
@@ -6448,16 +6497,20 @@ int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track,
                                         time_ms, &detect_change);
 
+    if(image){
+
     if (detect_change)
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
 
-   // printf("subtitle x:%d y:%d\n",image->dst_x,image->dst_y);
+    printf("subtitle x:%d y:%d\n",image->w,image->h);
 
     overlay_ass_image(ass, frame, image);
-
+    }
     return 0;
 
 }
+
+
 void filter_rgba( const AVFrame *frame,
                                         int slice_start, int slice_end,
                                         int do_alpha, int step,uint8_t *rgba_map,uint8_t *color_rgba,int factor)
@@ -6503,7 +6556,7 @@ int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_f
 
     int factor;
 
-    printf(" factor :%d %d %d", inner_serise,duration_frames,interval_frames);
+    //printf(" factor :%d %d %d", inner_serise,duration_frames,interval_frames);
     if (inner_serise<duration_frames){
         factor=inner_serise*fade_per_frame;
 
@@ -6524,7 +6577,7 @@ int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_f
 
     //factor=duration_frames*fade_per_frame/2;
 
-    printf(" alpha factor: %d \n",factor);
+    //printf(" alpha factor: %d \n",factor);
    
     //int factor=360*fade_per_frame;
     int bpp = pixdesc->flags & AV_PIX_FMT_FLAG_PLANAR ?
@@ -6840,15 +6893,11 @@ end:
 
 
 
-int main(int argc, char **argv)
+/*int main(int argc, char **argv)
 {
 
 
- /* while(1){
-int64_t current_timestap=av_gettime_relative_customer();
-printf("now:%"PRId64"\n",current_timestap);
 
-  }*/
 
 
 
@@ -6891,5 +6940,6 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
 
     task_handle_process_info_free(info) ;  
     return 0;
-}
+}*/
+
 
