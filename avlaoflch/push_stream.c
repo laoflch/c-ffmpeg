@@ -1076,8 +1076,8 @@ AVFilterContext *mainsrc_ctx_point,*subtitle_ctx_point,*logo_ctx_point,*resultsi
                         filter_graph_des->ass->original_w=0;
                         filter_graph_des->ass->alpha=0;
 
-                        filter_graph_des->ass->empty_layout_frame=gen_empty_layout_frame(dec_ctx->width,dec_ctx->height);
-filter_graph_des->ass->empty_layout_frame_little=gen_empty_layout_frame(1,1);
+                        //filter_graph_des->ass->empty_layout_frame=gen_empty_layout_frame(dec_ctx->width,dec_ctx->height);
+//filter_graph_des->ass->empty_layout_frame_little=gen_empty_layout_frame(1,1);
 
                         init_subtitles(filter_graph_des->ass);
                         config_input(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
@@ -2628,8 +2628,8 @@ if(endWith(filter_graph_des->ass->filename,LAOFMC_SUB_FILE_ASS_SUFFIX)){
                         filter_graph_des->ass->original_w=0;
                         filter_graph_des->ass->alpha=0;
 
-                        filter_graph_des->ass->empty_layout_frame=gen_empty_layout_frame(dec_ctx->width,dec_ctx->height);
-filter_graph_des->ass->empty_layout_frame_little=gen_empty_layout_frame(1,1);
+                        //filter_graph_des->ass->empty_layout_frame=gen_empty_layout_frame(dec_ctx->width,dec_ctx->height);
+//filter_graph_des->ass->empty_layout_frame_little=gen_empty_layout_frame(1,1);
 //动态加载字幕文件
                         init_subtitles_dynamic(filter_graph_des->ass,filter_graph_des->subtitle_dec_ctx);
                         //init_subtitles(filter_graph_des->ass);
@@ -4448,6 +4448,8 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     FilterGraph *filter_graph_des = av_mallocz(sizeof(*filter_graph_des));
     filter_graph_des->subtitle_path=av_mallocz(strlen(subtitle_file_path));
     filter_graph_des->current_frame_pts=0;
+    filter_graph_des->ass=NULL;
+    filter_graph_des->overlay_ctx=NULL;
 
     /*复制字幕文件名*/
     strcpy(filter_graph_des->subtitle_path, subtitle_file_path);
@@ -5035,8 +5037,8 @@ end:
     av_frame_free(&frame);
     av_frame_free(&new_logo_frame);
    
-    //if(sub_frame)
-    free_subtitle_frame(sub_frame);
+    if(sub_frame)
+       free_subtitle_frame(sub_frame);
     
 
     avformat_close_input(&ifmt_ctx);
@@ -5052,7 +5054,7 @@ end:
     av_packet_free(&pkt);
     av_packet_free(&out_pkt);
 
-    av_buffer_unref(&hw_device_ctx);
+   av_buffer_unref(&hw_device_ctx);
 
 
    
@@ -5061,21 +5063,30 @@ end:
         avfilter_free(*mainsrc_ctx);
         avfilter_free(*logo_ctx);
         avfilter_free(*resultsink_ctx);
+
+       
     }
 
+     
+    //释放滤镜
+    avfilter_graph_free(filter_graph);
+    //if(afilter_graph)
     avfilter_free(*abuffersrc_ctx);
     avfilter_free(*abuffersink_ctx);
 
-    /*释放滤镜*/
-    avfilter_graph_free(filter_graph);
     avfilter_graph_free(afilter_graph);
     if(filter_graph_des->ass) 
-        av_freep(filter_graph_des->ass);
+        av_free(filter_graph_des->ass);
     
     if(filter_graph_des->overlay_ctx)
-        av_freep(filter_graph_des->overlay_ctx);
-    av_freep(filter_graph_des->subtitle_path);
-    av_free(filter_graph_des);
+        av_free(filter_graph_des->overlay_ctx);
+
+    if(filter_graph_des->subtitle_path)
+        av_free(filter_graph_des->subtitle_path);
+    if(filter_graph_des)
+        av_free(filter_graph_des);
+
+    //av_freep只能用于指向指针的指针,因为还需要对指针赋NULL，否则找不到地址
 
     av_freep(input_streams);
     av_freep(output_streams);
