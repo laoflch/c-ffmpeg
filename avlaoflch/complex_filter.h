@@ -42,8 +42,8 @@ typedef struct AssContext {
     int     pix_step[4];       ///< steps per pixel for each plane of the main output
     int original_w, original_h;
     int shaping;
-    AVFrame *empty_layout_frame;  
-    AVFrame *empty_layout_frame_little;  
+    //AVFrame *empty_layout_frame;  
+    //AVFrame *empty_layout_frame_little;  
     FFDrawContext draw;
 } AssContext;
 
@@ -461,7 +461,7 @@ extern const AVIOInterruptCB int_cb ;
 int read_frame_from_audio_fifo(AVAudioFifo *fifo,
                                       AVCodecContext *occtx,
                                       AVFrame **frame,enum AVSampleFormat);
-int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef *hw_device_ctx);
+int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef **hw_device_ctx);
 
 int hw_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping,InputStream **input_streams,OutputStream **output_streams);
 

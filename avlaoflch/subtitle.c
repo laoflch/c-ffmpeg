@@ -146,39 +146,7 @@ static void init(int frame_w, int frame_h,ASS_Library **ass_library_point,ASS_Re
                   ASS_FONTPROVIDER_AUTODETECT, NULL, 1);
 }
 
-image_t *gen_image(int width, int height)
-{
-    image_t *img = malloc(sizeof(image_t));
-    img->width = width;
-    img->height = height;
-    img->stride = width * 4;
-    img->buffer = calloc(1,img->height*img->stride);
 
-    printf("memset buffer \n");
-    memset(img->buffer, 0x00, img->stride * img->height);
-    //for (int i = 0; i < height * width * 3; ++i)
-    // img->buffer[i] = (i/3/50) % 100;
-    return img;
-}
-AVFrame *gen_empty_layout_frame(int width, int height)
-{
-
-   int ret;
-   image_t *img=gen_image(width,height);
-   AVFrame *tmp_frame;
-                tmp_frame=av_frame_alloc();
-
-                
-
-                tmp_frame->width=width;
-                tmp_frame->height=height;
-                //tmp_frame->format=logo_frame->format;
-                tmp_frame->format=AV_PIX_FMT_RGBA;
-                ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
-
-
-                return tmp_frame;
-}
 
 #define _r(c)  ((c)>>24)
 #define _g(c)  (((c)>>16)&0xFF)

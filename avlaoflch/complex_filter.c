@@ -4316,25 +4316,7 @@ void ff_blend_mask(FFDrawContext *draw, FFDrawColor *color,
                       3, 0, image->dst_x, image->dst_y);
     }
 }
- void overlay_ass_image2(AssContext *ass, AVFrame *picref,
-                              const ASS_Image *image)
-{
 
-
-
-         image_t  *img=gen_image(image->w, image->h);
-printf("gen_image:%d %d\n",img->buffer,image->h);
-         blend(img,image);
-         AVFrame *frame=av_frame_alloc();
-        frame->width=img->width;
-        frame->height=img->height;
-        frame->format=AV_PIX_FMT_RGBA;
-        av_image_fill_arrays(frame->data,frame->linesize,img->buffer,AV_PIX_FMT_RGBA,img->width,img->height,1);
-
-         //int linesize[4]={img->stride,0,0,0};
-         ff_copy_rectangle2(&ass->draw, picref->data, picref->linesize, frame->data, frame->linesize, 0, 0, 0, 0, frame->width, frame->height);
-
-   }
 int push_video_to_rtsp_subtitle_logo2(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
 
     InputStream **input_streams = NULL;
@@ -6443,15 +6425,17 @@ sw_frame->height=frame->height;
 
 }
 
-int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef *hw_device_ctx){
+int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef **hw_device_ctx){
     int err = 0;
+ 
 
-    if ((err = av_hwdevice_ctx_create(&hw_device_ctx, type,
+    if ((err = av_hwdevice_ctx_create(hw_device_ctx, type,
                                       NULL, NULL, 0)) < 0) {
         fprintf(stderr, "Failed to create specified HW device.\n");
         return err;
     }
-    ctx->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+//sleep(60);
+    ctx->hw_device_ctx = av_buffer_ref(*hw_device_ctx);
 
     return err;
 }
@@ -6464,6 +6448,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
         fprintf(stderr, "Failed to create VAAPI frame context.\n");
         return -1;
     }
+
     frames_ctx = (AVHWFramesContext *)(hw_frames_ref->data);
     frames_ctx->format    = AV_PIX_FMT_CUDA;
     frames_ctx->sw_format = AV_PIX_FMT_YUV420P;
@@ -6476,13 +6461,16 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
         av_buffer_unref(&hw_frames_ref);
         return err;
     }
+
     ctx->hw_frames_ctx = av_buffer_ref(hw_frames_ref);
+
     if (!ctx->hw_frames_ctx){
 
       //printf("9999999999999999999999999");
         err = AVERROR(ENOMEM);
     }
     av_buffer_unref(&hw_frames_ref);
+
     return err;
 }
 
