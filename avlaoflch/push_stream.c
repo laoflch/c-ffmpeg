@@ -164,6 +164,12 @@ void add_input_stream( AVFormatContext *ic, int stream_index,int input_stream_in
         //if(rate_emu){
         ist->start=av_gettime_relative();
         //}
+        //
+        if(ic->start_time>0){
+            ist->start_pts=av_rescale_q(ic->start_time,AV_TIME_BASE_Q,st->time_base);
+        }else{
+            ist->start_pts=0;
+        }
         ist->ts_scale = 1.0;
         //AVCodecParameters *in_codecpar = ifmt_ctx->streams[0]->codecpar;
 //AVRational time_base= st->time_base;
@@ -617,7 +623,6 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
  **/
 
 int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
-  printf("hw device ctx ref in graph: %d\n",av_buffer_get_ref_count(dec_ctx->hw_device_ctx));
     if(pkt!=NULL){
         AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
         int ret,s_pts,frame_key,frame_pict_type;
@@ -755,7 +760,7 @@ int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AV
                    filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
                    filter_graph_des->ass->filename=filter_graph_des->subtitle_path;
                    filter_graph_des->ass->stream_index=-1;
-                   filter_graph_des->ass->charenc=NULL;
+                   filter_graph_des->ass->charenc=filter_graph_des->subtitle_charenc;
                    filter_graph_des->ass->force_style=NULL;
                    filter_graph_des->ass->fontsdir=NULL;
                    filter_graph_des->ass->original_w=0;
@@ -899,8 +904,19 @@ int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AV
 //处理text字幕
                     if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
 
-                        frame->pts=s_frame_pts;
-                        handle_subtitle(frame, filter_graph_des->ass, dec_ctx->time_base) ;
+                        //frame->pts=s_frame_pts;//+av_rescale_q(fmt_ctx->start_time,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base);
+                       // printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
+                        if(filter_graph_des->subtitle_time_offset>0){ 
+                            frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+                        }else if (filter_graph_des->subtitle_time_offset<0){
+                            frame->pts=s_frame_pts-av_rescale_q(-filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+
+                        }else {
+                            frame->pts=s_frame_pts;
+
+                        }
+
+                        handle_subtitle(frame, filter_graph_des->ass, dec_ctx->time_base);
                         break;
                     }
 
@@ -1060,10 +1076,11 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     //logo源 
     AVFilterContext **logo_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
     AVFilterContext **resultsink_ctx = (AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
-
+   
    /*初始化滤镜描述*/
     FilterGraph *filter_graph_des = av_mallocz(sizeof(*filter_graph_des));
-    filter_graph_des->subtitle_path=av_mallocz(strlen(subtitle_file_path));
+    filter_graph_des->subtitle_path=av_mallocz(strlen(subtitle_file_path)+1);
+    
     filter_graph_des->current_frame_pts=0;
     filter_graph_des->ass=NULL;
     filter_graph_des->overlay_ctx=NULL;
@@ -1206,6 +1223,9 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
         }
     }
 
+
+
+
     /*打开视频文件
      */ 
     if ((ret = avformat_open_input(&ifmt_ctx, video_file_path, 0, 0)) < 0) {
@@ -1253,6 +1273,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     }
 
     ofmt = ofmt_ctx->oformat;
+
 
     for (i = 0; i < ifmt_ctx->nb_streams; i++) {
         stream_mapping[i] = -1;
@@ -1545,7 +1566,16 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
 
             continue;
         }
+        if(filter_graph_des->subtitle_time_offset!=task_handle_process_info->control->subtitle_time_offset){
+            filter_graph_des->subtitle_time_offset=task_handle_process_info->control->subtitle_time_offset;
+        }
 
+        if(filter_graph_des->subtitle_charenc!=task_handle_process_info->control->subtitle_charenc){
+            filter_graph_des->subtitle_charenc=task_handle_process_info->control->subtitle_charenc;
+        }
+        pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+        pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+//printf("strat_time:%"PRId64" %"PRId64"  \n",ifmt_ctx->start_time,input_streams[stream_mapping[pkt->stream_index]]->start_pts);
         /*处理控速
          * */
         if (rate_emu) {
@@ -1574,14 +1604,13 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
                 if (pkt->data!=NULL) {
                     av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
                 }
- printf("hw device ctx ref out 2:%d\n",av_buffer_get_ref_count(*hw_device_ctx));
                 //处理滤镜 
                 ret=(*handle_video_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
                 if (ret == AVERROR(EAGAIN)) {
 
                     continue;
                 }else if (ret != 0) {
-                    av_log(NULL,AV_LOG_ERROR, "handle video codec faile\n");
+                    av_log(ifmt_ctx,AV_LOG_ERROR, "handle video codec faile\n");
 
                     continue;
                 }else{
@@ -1606,7 +1635,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
                if (ret == AVERROR(EAGAIN)) {
                    continue;
                }else if (ret < 0) {
-                   fprintf(stderr, "handle audio codec faile\n");
+                   av_log(ifmt_ctx,AV_LOG_ERROR, "handle audio codec faile\n");
 
                    continue;
                }
@@ -1629,7 +1658,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
                if (ret == AVERROR(EAGAIN)) {
                    continue;
                }else if (ret < 0) {
-                   fprintf(stderr, "handle audio codec faile\n");
+                   av_log(ifmt_ctx,AV_LOG_ERROR, "handle audio codec faile\n");
 
                    continue;
                }
@@ -1671,6 +1700,8 @@ end:
     av_packet_free(&pkt);
     av_packet_free(&out_pkt);
 
+    //释放输入流的解码AVCodec_Context
+
     for(int i=0;i<nb_input_streams;i++){
 
         //av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
@@ -1679,7 +1710,7 @@ end:
         avcodec_free_context(&input_streams[i]->dec_ctx);
 
     }
-
+    //释放输出流的编码AVCodec_Context
     for(int i=0;i<nb_output_streams;i++){
         //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
         //avcodec_close(output_streams[i]->enc_ctx);
@@ -1786,7 +1817,10 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->bit_rate= -1;
     //
     info->audio_channels=6;
-
+    //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
+    info->control->subtitle_time_offset=2000;
+    info->control->subtitle_charenc="GBK";
+    
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
 

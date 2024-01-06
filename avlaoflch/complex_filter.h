@@ -139,6 +139,8 @@ typedef struct FilterGraph {
     int reconfiguration;
 
     char *subtitle_path;
+    char *subtitle_charenc;//字幕文件编码格式，如：UTF-8,GBK
+    int64_t subtitle_time_offset;
     AssContext *ass;
     OverlayContext *overlay_ctx;
     SubtitleFrame *sub_frame;
@@ -186,6 +188,7 @@ typedef struct InputStream {
 
     int64_t       next_pts;  ///< synthetic pts for the next decode frame (in AV_TIME_BASE units)
     int64_t       pts;       ///< current pts of the decoded frame  (in AV_TIME_BASE units)
+    int64_t       start_pts;
     int           wrap_correction_done;
 
     int64_t filter_in_rescale_delta_last;
@@ -397,6 +400,9 @@ typedef struct Fade2Context {
 typedef struct TaskHandleProcessControl {
      bool task_cancel; //ffmpeg 运行任务是否取消
 
+     int64_t subtitle_time_offset; //外挂字幕时间轴偏移,单位毫秒ms
+
+     char *subtitle_charenc;//字幕文件编码格式，如：UTF-8,GBK
 
 
 

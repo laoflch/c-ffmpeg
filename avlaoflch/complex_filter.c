@@ -163,10 +163,13 @@ TaskHandleProcessInfo *task_handle_process_info_alloc(){
     return info;
 }
 void task_handle_process_info_free(TaskHandleProcessInfo *info){
-
-    av_free(info->control);
-    av_free(info);
-
+    
+    if(info){
+        if(info->control){
+            av_free(info->control);
+        }
+        av_free(info);
+    }
 };
 void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char *tag)
 {
@@ -6482,10 +6485,10 @@ int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
 
     double time_ms = frame->pts * av_q2d(time_base) * 1000;
 
+   if(ass->renderer&&ass->track) {
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track,
                                         time_ms, &detect_change);
-
-    if(image){
+       if(image){
 
     if (detect_change)
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
@@ -6494,6 +6497,8 @@ int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
 
     overlay_ass_image(ass, frame, image);
     }
+
+   }
     return 0;
 
 }
