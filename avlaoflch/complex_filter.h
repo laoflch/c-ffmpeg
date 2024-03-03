@@ -189,6 +189,10 @@ typedef struct InputStream {
     int64_t       next_pts;  ///< synthetic pts for the next decode frame (in AV_TIME_BASE units)
     int64_t       pts;       ///< current pts of the decoded frame  (in AV_TIME_BASE units)
     int64_t       start_pts;
+    int64_t       start_time;
+    int64_t       current_pts;
+    int64_t       origin_stream_pts;
+    int64_t       origin_stream_dts;
     int           wrap_correction_done;
 
     int64_t filter_in_rescale_delta_last;
@@ -374,7 +378,7 @@ typedef struct OutputStream {
 
     /* packet picture type */
     int pict_type;
-
+    //AVPacket *pkt;
     /* frame encode sum of squared error values */
     int64_t error[4];
 
@@ -400,9 +404,16 @@ typedef struct Fade2Context {
 typedef struct TaskHandleProcessControl {
      bool task_cancel; //ffmpeg 运行任务是否取消
 
+     bool task_pause; //ffmpeg 暂停读取输入流
+
      int64_t subtitle_time_offset; //外挂字幕时间轴偏移,单位毫秒ms
 
      char *subtitle_charenc;//字幕文件编码格式，如：UTF-8,GBK
+
+     uint8_t current_running_status;//当前输入流处理状态，如：暂停或者运行
+     int64_t current_seek_pos_time;//当前seek的时间位置
+
+     int64_t seek_time;//输入流跳跃时间，正值快进，负值后退，时间单位秒(s)
 
 
 
@@ -496,7 +507,7 @@ static void overlay_ass_image(AssContext *ass, AVFrame *picref,
                               const ASS_Image *image);
 
 int audio_resample(AVFrame *frame, SwrContext **swr_ctx,const int in_sample_rate ,const enum AVSampleFormat in_sfmt,const uint64_t in_channel_layout,const int in_channels,const int in_nb_samples ,const int out_sample_rate ,const enum AVSampleFormat out_sfmt,const int64_t out_channel_layout);
-static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base,AVCodecContext *enc_ctx);
+int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base,AVCodecContext *enc_ctx);
 int filter_audio_frame(AVFrame *frame,AVFilterContext *buffersink_ctx, AVFilterContext *buffersrc_ctx);
 
 

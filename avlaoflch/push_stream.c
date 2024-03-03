@@ -13,6 +13,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavfilter/buffersink.h>
 //#include <libavfilter/drawutils.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -161,8 +162,10 @@ void add_input_stream( AVFormatContext *ic, int stream_index,int input_stream_in
         ist->nb_samples = 0;
         ist->min_pts = INT64_MAX;
         ist->max_pts = INT64_MIN;
-        //if(rate_emu){
+               //if(rate_emu){
         ist->start=av_gettime_relative();
+        ist->start_time=av_gettime_relative();
+
         //}
         //
         if(ic->start_time>0){
@@ -418,7 +421,50 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
 
     return ost;
 }
+int handle_seek(AVFormatContext *fmt_ctx,TaskHandleProcessControl *control){
 
+  if(fmt_ctx){
+if (control->seek_time !=0) {
+        int64_t seek_timestamp = control->current_seek_pos_time+control->seek_time*AV_TIME_BASE+fmt_ctx->start_time;
+
+        if (!(fmt_ctx->iformat->flags & AVFMT_SEEK_TO_PTS)) {
+            int dts_heuristic = 0;
+            for (int i=0; i<fmt_ctx->nb_streams; i++) {
+                const AVCodecParameters *par = fmt_ctx->streams[i]->codecpar;
+                if (par->video_delay) {
+                    dts_heuristic = 1;
+                    break;
+                }
+            }
+            if (dts_heuristic) {
+                seek_timestamp -= 3*AV_TIME_BASE / 23;
+            }
+        }
+
+
+    int64_t seek_target=seek_timestamp;
+    int64_t seek_min =INT64_MIN;
+    int64_t seek_max=seek_timestamp;
+
+    //int flags=AVSEEK_FLAG_FRAME;
+printf("################## %"PRId64" \n",seek_target);
+    int ret=avformat_seek_file(fmt_ctx, -1, seek_min, seek_target,seek_max, 0);
+    if(ret<0){
+
+      av_log(NULL,AV_LOG_WARNING,"%s:error while seeking\n ",fmt_ctx->url);
+
+    }
+
+    //control->current_seek_pos_time+=control->seek_time*AV_TIME_BASE;
+
+  }
+  return 0; 
+  }else{
+    av_log(NULL, AV_LOG_WARNING, "Can't find format context for seek.\n");
+
+    return 1;
+  }
+}
 
 int handle_sub(AVFrame *frame,AssContext *ass,SubtitleFrame *sub_frame,OverlayContext *overlay_ctx,AVRational time_base){
      // printf("^^^^^^^^^^^^^^^^^^^^^8 pts:%"PRId64" %f \n",frame->pts,av_q2d(time_base));
@@ -492,6 +538,74 @@ if(sub_frame->is_display&&time_ns>=sub_frame->pts){
   return 0;
 }
 
+int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,InputStream **input_streams,int *stream_mapping,OutputStream **output_streams){
+
+ AVStream *out_stream;
+ int ret;
+//log_packet(ofmt_ctx, out_pkt, "in-2")
+//
+//;
+//printf("out pts: %"PRId64" \n", pkt->pts); 
+ //pkt->stream_index = stream_mapping[pkt->stream_index];
+       // out_stream = ofmt_ctx->streams[pkt->stream_index];
+        //InputStream *ist = input_streams[stream_mapping[pkt->stream_index]];
+
+        out_pkt->stream_index=stream_mapping[pkt->stream_index];
+ out_stream = ofmt_ctx->streams[out_pkt->stream_index];
+
+printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,(*enc_ctx)->time_base.den);
+       // out_pkt->pts = av_rescale_q_rnd(out_pkt->pts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+        //out_pkt->dts = av_rescale_q_rnd(out_pkt->dts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+        //out_pkt->duration = av_rescale_q_rnd(out_pkt->duration, input_streams[pkt->stream_index]->st->time_base,  out_stream->time_base,AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+//if(out_pkt->dts==AV_NOPTS_VALUE){
+
+  //out_pkt->dts=out_pkt->pts;
+  //out_pkt->dts=pkt->dts;
+
+//}
+
+
+//printf("################################4\n");
+        //out_pkt->pos=origin_pos;
+         //printf("########77777########%d %d\n",out_pkt->stream_index,stream_mapping[out_pkt->stream_index]);
+      //av_packet_rescale_ts(out_pkt,in_stream->time_base, out_stream->time_base);
+      av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,out_stream->time_base);
+
+        //out_pkt->pos = -1;
+        //out_pkt-
+         log_packet(ofmt_ctx, out_pkt, "out");
+
+        ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
+        if (ret < 0) {
+            fprintf(stderr, "Error muxing packet\n");
+ //av_packet_unref(pkt);
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+       // av_frame_unref(frame);
+
+
+return ret;
+  //          break;
+        }
+//}  
+//
+/*处理暂停*/
+
+/*if(output_streams[out_pkt->stream_index]->pkt!=NULL){
+av_packet_unref(output_streams[out_pkt->stream_index]->pkt);
+av_packet_move_ref(output_streams[out_pkt->stream_index]->pkt,out_pkt);
+}else{
+output_streams[out_pkt->stream_index]->pkt=av_packet_alloc();
+};
+*/
+/*处理暂停*/
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        //av_frame_unref(frame);
+
+        return 0;
+
+}
 
 
 int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCodecContext *sub_condec_ctx,AVFormatContext *fmt_ctx,int *stream_mapping,InputStream **input_streams,OutputStream **output_streams,AssContext *ass){
@@ -596,6 +710,252 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
   };
 }
 
+/*只使用音频滤镜对不同音频格式进行转换,与不带only的音频滤镜不同的地方就是不预先根据frame_size的大小,对frame进行裁剪,而是通过buffersink设置frame_size自动处理。
+ *
+ */
+uint64_t auto_audio_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping, uint64_t s_pts,OutputStream **output_streams,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph,char *afilter_desrc){
+
+  if(pkt!=NULL){
+
+
+    int ret;
+
+     uint64_t origin_pkt_pts=pkt->pts;
+      uint64_t origin_pkt_duration=pkt->duration;
+  printf("dec time base:{%d %d}input pkt duration:%"PRId64"\n",dec_ctx->time_base.den,dec_ctx->time_base.num,pkt->duration);
+ printf(" input pkt duration:%"PRId64"\n",pkt->duration);
+
+
+    ret = avcodec_send_packet(dec_ctx, pkt);
+    if (ret < 0) {
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        //av_frame_unref(frame);
+
+        fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
+        return 1;
+    }
+
+
+    while (ret >= 0) {
+
+
+        ret = avcodec_receive_frame(dec_ctx, frame);
+ //printf("in sample fmt:%d\n",frame->format);
+      if (ret == AVERROR(EAGAIN)) {
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+        break;
+      }else if( ret == AVERROR_EOF){
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+                 return 0;
+      }
+        else if (ret < 0) {
+            fprintf(stderr, "Error during decoding %d \n ",ret);
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+            return 1 ;
+        }
+    int enc_frame_size=(*enc_ctx)->frame_size;
+           float factor=(float)enc_frame_size/(float)frame->nb_samples;
+           int frame_size=frame->nb_samples;
+      int s_stream_index=pkt->stream_index;
+      int s_duation=origin_pkt_duration*factor;
+      uint64_t origin_s_pts=s_pts; 
+        //}
+  bool if_recreate_pts=true;
+
+
+        if(enc_frame_size>frame->nb_samples&&enc_frame_size%frame->nb_samples==0) {
+          if_recreate_pts=false;
+        }
+
+        //AVFrame *frame_enc;
+    if (frame!=NULL){
+
+
+
+        printf("Send frame audio :%"PRId64" size %"PRId64" stream index%d aspect{%d %d} factor:%f \n", frame->pts,frame->linesize,pkt->stream_index,frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num,factor);
+    //int enc_frame_size=(*enc_ctx)->frame_size;
+          //音频重采集
+       if(*filter_graph==NULL){
+
+         if(init_audio_filters(afilter_desrc, buffersink_ctx, buffersrc_ctx, filter_graph, dec_ctx, dec_ctx->time_base,(*enc_ctx))){
+
+         }
+
+       }
+   if (av_buffersrc_add_frame_flags(*buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_KEEP_REF) < 0) {
+                        av_log(NULL, AV_LOG_ERROR, "Error while feeding the audio filtergraph\n");
+                                         }
+s_pts+=frame->nb_samples;
+
+printf("s_pts w:%"PRId64"\n" ,s_pts);
+
+
+ av_frame_unref(frame);
+
+                    /* pull filtered audio from the filtergraph */
+                    while (ret >=0) {
+                        ret = av_buffersink_get_frame(*buffersink_ctx, frame);
+                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
+ av_packet_unref(pkt);
+ //
+        av_packet_unref(out_pkt);
+                          //s_pts=s_pts+pkt->duration;
+                           //return s_pts; 
+                           break;
+                        }
+                        if (ret < 0){
+                           break;
+                        }
+
+                                               s_pts-=enc_frame_size;
+
+printf("s_pts r:%"PRId64"\n" ,s_pts);
+        int ret_enc = avcodec_send_frame(*enc_ctx, frame);
+    if (ret_enc < 0) {
+        fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
+       return 1; 
+    } 
+      //接收编码完成的packet
+    while (ret_enc >= 0) {
+        ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
+          if (ret_enc == AVERROR(EAGAIN)) {
+ av_packet_unref(pkt);
+ //
+        av_packet_unref(out_pkt);
+                          av_frame_unref(frame);
+ //s_pts=s_pts+pkt->duration;
+
+                    break;
+         }else if( ret_enc == AVERROR_EOF){
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+                      av_frame_unref(frame);
+
+            break;
+
+    
+      }else if (ret_enc < 0) {
+            fprintf(stderr, "Error during encoding\n");
+                         av_frame_unref(frame);
+            break;
+        }
+              
+ av_frame_unref(frame);
+ if (out_pkt->data!=NULL) {
+ 
+pkt->stream_index=s_stream_index;
+//out_pkt->pts=pkt->pts;
+//out_pkt->
+
+// out_pkt->pts=pkt->pts;
+//if (pkt->duration==0){
+
+      printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",pkt->pts,s_pts,pkt->duration);
+//
+     // out_pkt->pts=pkt->pts;
+
+out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
+ printf("####################3\n");
+      out_pkt->duration=pkt->duration;
+    
+ //   } else if(if_recreate_pts){
+  //  out_pkt->pts=s_pts+out_pkt->duration;
+   // }else {
+    //out_pkt->pts=pkt->pts-pkt->duration*(factor-1);
+//}
+//if((out_pkt->pts % 3) == 0){
+ //  out_pkt->pts++;
+//}
+//
+//
+    if (factor<1&factor>0){
+//
+     out_pkt->duration=s_duation;
+  /*  //out_pkt->pts=s_pts;
+   if(origin_s_pts==0){
+
+      out_pkt->pts=origin_pkt_pts;
+
+    }else{
+     // out_pkt->pts=pkt->pts-pkt->duration*(factor-1);a
+     //
+     float leve_factor=(float)s_pts/(float)frame_size;
+
+     printf(" leve fatch:%.2f\n",leve_factor);
+     //uint64_t intver_duration=av_rescale_q(origin_s_pts/,AV_TIME_BASE_Q, (*enc_ctx)->time_base);
+     out_pkt->pts=origin_pkt_pts-origin_pkt_duration+origin_pkt_duration*(1-leve_factor);
+
+
+printf("origin_s_pts:%"PRId64" out pts:%"PRId64" in pts:%"PRId64" \n",origin_s_pts,out_pkt->pts,pkt->pts);
+    }
+*/
+}
+//output_streams[stream_mapping[pkt->stream_index]]->frame_number++;
+ out_pkt->dts=out_pkt->pts;
+ //s_pts = out_pkt->pts;
+
+ //s_pts = out_pkt->pts+out_pkt->duration;
+ }else{
+
+ }
+//out_pkt->dts=out_pkt->pts;
+
+
+     // av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+    //输出流
+
+    ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
+
+
+   
+    av_frame_unref(frame);
+    //av_frame_free(&frame_enc);
+
+    if(ret_enc<0){
+        printf("interleaved write error:%d",ret_enc);
+//av_packet_unref(pkt);//确保非输出packet也释放
+        //return ret_enc;
+    }
+//if (factor<1&factor>0){
+
+
+ //   s_pts=s_pts+s_duation;
+
+
+    /*if((output_streams[stream_mapping[pkt->stream_index]]->frame_number%(int)(1/(1-factor)))==0){
+        out_pkt->pts++;
+
+    }*/
+//}//
+
+
+    av_packet_unref(out_pkt);
+   
+    }
+
+
+      }
+    //return s_pts;  
+
+    }
+  
+ 
+    }
+}
+  
+
+return s_pts;
+
+}
 
 
 /*  all_subtitle_logo_native_video_codec_func
@@ -622,7 +982,7 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
  * 
  **/
 
-int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
+int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
     if(pkt!=NULL){
         AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
         int ret,s_pts,frame_key,frame_pict_type;
@@ -963,7 +1323,7 @@ int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AV
                     av_frame_unref(frame);
                     av_frame_unref(sw_frame);
                     av_frame_free(&sw_frame);
-                    av_log(NULL, "Error sending a frame for encoding %d \n",ret_enc);
+                    av_log(NULL,AV_LOG_ERROR, "Error sending a frame for encoding %d \n",ret_enc);
                     continue;
                 }
                 if (filter_graph_des->if_hw){
@@ -986,22 +1346,25 @@ int all_subtitle_logo_native_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AV
                      } else if (ret_enc < 0) {
                          av_frame_unref(sw_frame);
                          av_frame_free(&sw_frame);
-                         av_log(NULL, "Error during encoding\n",NULL);
+                         av_log(NULL,AV_LOG_ERROR, "Error during encoding\n",NULL);
                          break; 
                      }
 
 
                      if (out_pkt->data!=NULL) {
 
-                         out_pkt->pts=pkt->pts;
-                         out_pkt->dts=pkt->dts;
+                         //out_pkt->pts=pkt->pts;
+                         //out_pkt->dts=pkt->dts;
+                         out_pkt->pts=av_gettime_relative()-input_streams[pkt->stream_index]->start_time;
+                         out_pkt->dts=out_pkt->pts;
                          out_pkt->duration=pkt->duration;
 
                      }
     //输出流
-                     ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,stream_mapping,output_streams);
+                     ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
                      if(ret_enc<0){
-                         av_log(NULL,"interleaved write error:%d",ret_enc);
+                       //printf("$$$$$$$$$$$$$$$$$$$$$$$$$\n");
+                         av_log(NULL,AV_LOG_ERROR,"interleaved write error:%d\n",ret_enc);
                      }
 
                      break;
@@ -1168,7 +1531,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
 
     /*视频滤镜解编码处理函数
       */
-    int (*handle_video_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *,AVFilterGraph **,AVFilterContext **,AVFilterContext **,AVFilterContext **,FilterGraph *,OutputStream **output_streams );  
+    int (*handle_video_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **,int *,AVFilterGraph **,AVFilterContext **,AVFilterContext **,AVFilterContext **,FilterGraph *,OutputStream **output_streams );  
 
 
 
@@ -1178,7 +1541,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
 
     /*音频滤镜解编码处理函数
       */
-    uint64_t (*handle_audio_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),int *,uint64_t,OutputStream **,AVFilterContext **, AVFilterContext **,AVFilterGraph **,char *afilter_desrc);
+    uint64_t (*handle_audio_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **,int *,uint64_t,OutputStream **,AVFilterContext **, AVFilterContext **,AVFilterGraph **,char *afilter_desrc);
 
     /*字幕解编码处理函数
       */
@@ -1187,7 +1550,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
 
     /*帧输出处理函数
      * */
-    int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **);  
+    int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **);  
 
    
 
@@ -1201,9 +1564,9 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     /*设置帧处理函数
      */ 
     handle_video_codec=simple_video_codec_func;
-    handle_interleaved_write_frame=simple_interleaved_write_frame_func;
+    handle_interleaved_write_frame=seek_interleaved_write_frame_func;
     handle_video_complex_filter=all_subtitle_logo_native_video_codec_func;
-    handle_audio_complex_filter=complex_filter_audio_codec_func_only;
+    handle_audio_complex_filter=auto_audio_codec_func;
     handle_subtitle_codec=simple_subtitle_codec_func;
 
     /*设置ifmt的callback处理函数
@@ -1243,6 +1606,11 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     /*打印视频流信息
      */ 
     av_dump_format(ifmt_ctx, 0, video_file_path, 0);
+// ret=handle_seek(ifmt_ctx,task_handle_process_info->control );
+
+  //task_handle_process_info->control->subtitle_time_offset+=task_handle_process_info->control->seek_time*1000;
+ //task_handle_process_info->control->seek_time=0x00;
+ //ret = av_read_frame(ifmt_ctx, pkt); 
 
     /*打开RTSP视频推流Context
      */ 
@@ -1510,12 +1878,16 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
     AVStream *in_stream, *out_stream;
     InputStream *ist;
 
-    int64_t start_frame=0;
+    //bool retry =true;
 
+    int64_t start_frame=0,end_frame=0;
+    int64_t paused_time=0;
+// ret=handle_seek(ifmt_ctx,task_handle_process_info->control->seek_time );
+//task_handle_process_info->control->seek_time=0x00;
     //循环读取packet,直到接到任务取消信号
     while (!task_handle_process_info->control->task_cancel) {
 
-        /*处理控制速度
+   /*处理控制速度
          */
         
         if (rate_emu) {
@@ -1524,20 +1896,124 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
             for (i = 0; i < nb_input_streams; i++) {
 
                 ist = input_streams[i];
-                int64_t pts=ist->dts;
+                int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
                 int64_t current_timestap=av_gettime_relative();
                 int64_t now = current_timestap-ist->start;
+//printf("&&&&&&&&&&& %d %"PRId64" %"PRId64"  %"PRId64" %d \n",i,pts,now,ist->start,pts-now);
+//
+//
+
+
                 if (pts > now){
                     if_read_packet=false;
                     break;
                 }
             };
             if (!if_read_packet){
-                continue;
+                             continue;
             }
         };
 
-        /*从输入流读取帧，保存到pkt
+      /*处理暂停*/
+      if(task_handle_process_info->control->task_pause){
+
+        if(!paused_time){
+
+          paused_time=av_gettime_relative();
+
+        }
+        sleep(1);
+ for(int i=0;i<nb_output_streams;i++){
+ ist = input_streams[i];
+
+ //out_pkt=pkt;//output_streams[0]->pkt;
+ out_pkt->pts=av_gettime_relative()-input_streams[i]->start_time;
+                         out_pkt->dts=out_pkt->pts;
+                         out_pkt->duration=pkt->duration;
+                         out_pkt->stream_index=i;
+
+     /*if (rate_emu) {
+            //ist = input_streams[i];
+            //if (pkt != NULL && pkt->dts != AV_NOPTS_VALUE) {
+               // ist->next_dts = ist->dts += av_rescale_q(AV_TIME_BASE,  AV_TIME_BASE_Q,ist->st->time_base);
+//ist->next_dts = ist->dts =out_pkt->dts;
+//ist->next_pts = ist->pts =out_pkt->pts;
+               // ist->next_pts = ist->pts += av_rescale_q(AV_TIME_BASE,  AV_TIME_BASE_Q,ist->st->time_base);
+           // }
+     //}
+     int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
+
+     int64_t now = av_gettime_relative()-ist->start;
+
+     printf("&&&&&&&&&&&_new %d %"PRId64" %"PRId64"  %"PRId64" %d \n",i,pts,now,ist->start,pts-now);
+
+ }*/
+ av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,ofmt_ctx->streams[i]->time_base);
+      //直接输出packet 
+     log_packet(ofmt_ctx, out_pkt, "out");
+
+        ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
+        if (ret < 0) {
+            fprintf(stderr, "Error muxing packet\n");
+ //av_packet_unref(pkt);
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+       // av_frame_unref(frame);
+
+
+return ret;
+  //          break;
+        }
+//}  
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+      }
+        continue;
+
+    }else{
+      if (paused_time){
+
+          for (i = 0; i < nb_input_streams; i++) {
+              ist = input_streams[i];
+
+              ist->start+=(av_gettime_relative()-paused_time);
+
+              ist->pts-=av_rescale_q((av_gettime_relative()-paused_time),AV_TIME_BASE_Q,input_streams[i]->st->time_base);
+
+
+          }
+
+          paused_time=0;
+    }
+    
+    }
+
+    /*处理前进和后退*/
+      if(task_handle_process_info->control->seek_time!=0){//&&(end_frame==2000||end_frame==10000)){
+
+        task_handle_process_info->control->current_seek_pos_time=av_rescale_q(input_streams[stream_mapping[0]]->pts, input_streams[stream_mapping[0]]->st->time_base, AV_TIME_BASE_Q);
+               ret=handle_seek(ifmt_ctx,task_handle_process_info->control );
+        //task_handle_process_info->control->subtitle_time_offset+=task_handle_process_info->control->current_seek_pos_time/1000;
+        if(ret==0){
+
+          av_log(ifmt_ctx, AV_LOG_INFO, "seek %"PRId64" seconds \n",task_handle_process_info->control->seek_time);
+          for(int i=0;i<nb_output_streams;i++){
+        //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
+        //avcodec_close(output_streams[i]->enc_ctx);
+
+             input_streams[i]->start-=(task_handle_process_info->control->seek_time*AV_TIME_BASE);
+//input_streams[i]->start-=(task_handle_process_info->control->current_seek_pos_time+task_handle_process_info->control->seek_time*AV_TIME_BASE);
+input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[i]->st->time_base);
+          }
+
+
+          task_handle_process_info->control->seek_time=0x00;
+
+        }
+
+      }
+
+             /*从输入流读取帧，保存到pkt
          * */
         ret = av_read_frame(ifmt_ctx, pkt); 
 
@@ -1556,8 +2032,9 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
             break;
         }  
 
-        av_log(NULL,AV_LOG_DEBUG," input pkt duration:%"PRId64"\n",pkt->duration);
-  
+        av_log(ifmt_ctx,AV_LOG_DEBUG," input pkt duration:%"PRId64"\n",pkt->duration);
+  end_frame++;
+
         in_stream  = ifmt_ctx->streams[pkt->stream_index];
 
         if (pkt->stream_index >= stream_mapping_size ||
@@ -1573,18 +2050,55 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
         if(filter_graph_des->subtitle_charenc!=task_handle_process_info->control->subtitle_charenc){
             filter_graph_des->subtitle_charenc=task_handle_process_info->control->subtitle_charenc;
         }
-        pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
-        pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+//
+//log_packet(ifmt_ctx, pkt, "in-2");
+/*
+         if(pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts){
+            pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+        }else{
+            pkt->pts=pkt->pts+input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts+2*pkt->duration;
+         //  
+
+        }
+
+       if(pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts){
+
+            pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+        }else{
+            pkt->dts=pkt->dts+input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts+2*pkt->duration;
+//input_streams[stream_mapping[pkt->stream_index]]->start_pts=0;
+
+        }
 //printf("strat_time:%"PRId64" %"PRId64"  \n",ifmt_ctx->start_time,input_streams[stream_mapping[pkt->stream_index]]->start_pts);
-        /*处理控速
+//
+        input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts=pkt->pts;
+        input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts=pkt->dts;*/
+log_packet(ifmt_ctx, pkt, "in-2");
+//printf("seek_time:%"PRId64" %"PRId64"  \n",task_handle_process_info->control->seek_time*AV_TIME_BASE,av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+
+      //   pkt->pts=pkt->pts-(input_streams[stream_mapping[pkt->stream_index]]->start_pts+av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+
+if(pkt->dts==AV_NOPTS_VALUE){
+
+  pkt->dts=pkt->pts;
+  //out_pkt->dts=pkt->dts;
+
+}else{
+ //pkt->dts=pkt->dts-(input_streams[stream_mapping[pkt->stream_index]]->start_pts+av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+ pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+}
+
+
+   /*处理控速
          * */
         if (rate_emu) {
             ist = input_streams[stream_mapping[pkt->stream_index]];
             if (pkt != NULL && pkt->dts != AV_NOPTS_VALUE) {
-                ist->next_dts = ist->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base, AV_TIME_BASE_Q,AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-
-                ist->next_pts = ist->pts = ist->dts;
-            }
+                //ist->next_dts = ist->dts = av_rescale_q(pkt->dts, in_stream->time_base, AV_TIME_BASE_Q);
+ist->next_dts = ist->dts =pkt->dts;}
+ist->next_pts = ist->pts =pkt->pts;
+                //ist->next_pts = ist->pts = av_rescale_q(pkt->pts, in_stream->time_base, AV_TIME_BASE_Q);            }
         }
 
         /*处理音视频的解码和编码
@@ -1597,6 +2111,8 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
 
                 log_packet(ifmt_ctx, pkt, "in");
                 //已消费帧计数加一
+//task_handle_process_info->control->current_seek_pos_time=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
+                //input_streams[stream_mapping[pkt->stream_index]]->current_pts=pkt->pts;
                 task_handle_process_info->pass_duration=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
  task_handle_process_info->handled_rate=(float)task_handle_process_info->pass_duration/(float)task_handle_process_info->total_duration;
                 av_log(ifmt_ctx,AV_LOG_INFO,"Finished frames: %"PRId64" Total frames:%"PRId64" Finished rate:%f\n",task_handle_process_info->pass_duration,task_handle_process_info->total_duration,task_handle_process_info->handled_rate);
@@ -1605,7 +2121,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
                     av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
                 }
                 //处理滤镜 
-                ret=(*handle_video_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
+                ret=(*handle_video_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
                 if (ret == AVERROR(EAGAIN)) {
 
                     continue;
@@ -1629,7 +2145,7 @@ int push2rtsp_sub_logo(const char *video_file_path, const int video_index, const
                    av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
                }
 
-               ret=audio_pts=(*handle_audio_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,stream_mapping,audio_pts,output_streams,abuffersrc_ctx,abuffersink_ctx,afilter_graph,afilters_descr );
+               ret=audio_pts=(*handle_audio_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,audio_pts,output_streams,abuffersrc_ctx,abuffersink_ctx,afilter_graph,afilters_descr );
 
 
                if (ret == AVERROR(EAGAIN)) {
@@ -1766,9 +2282,7 @@ end:
 
 }
 
-int free_input_streams(){
 
-}
 
 
 int main(int argc, char **argv)
@@ -1820,12 +2334,17 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
     info->control->subtitle_time_offset=2000;
     info->control->subtitle_charenc="GBK";
+//printf("##################1\n");
+    info->control->seek_time=300;
+
+//printf("################## %d \n",info->control->seek_time);
+   // info->control->seek_time=1;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
 
 
-    task_handle_process_info_free(info) ;  
+    //task_handle_process_info_free(info) ;  
     return 0;
 }
 

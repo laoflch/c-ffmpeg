@@ -151,10 +151,16 @@ TaskHandleProcessInfo *task_handle_process_info_alloc(){
     info->bit_rate=0;
     info->audio_channel_layout=0;
 
+    TaskHandleProcessControl *tc= av_malloc(sizeof(*tc));
 
-    info->control=av_malloc(sizeof(TaskHandleProcessControl *));
 
+
+    //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
+    info->control=tc;
     info->control->task_cancel=false;
+    info->control->seek_time=0;
+    info->control->task_pause=false;
+    info->control->current_seek_pos_time=0;
 
     if (!info)
         return NULL;
@@ -6669,7 +6675,7 @@ end:
      return 0;
 }
 
-static int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx_point, AVFilterContext **buffersrc_ctx_point ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base,AVCodecContext *enc_ctx)
+int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ctx_point, AVFilterContext **buffersrc_ctx_point ,AVFilterGraph **filter_graph_point,AVCodecContext *dec_ctx,AVRational time_base,AVCodecContext *enc_ctx)
 {
     char args[512];
     int ret = 0;
