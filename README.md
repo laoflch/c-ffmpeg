@@ -40,6 +40,4 @@ make
 | interval_frames          | uint64_t | 0 | logo淡入淡入间隔帧数 |
 | present_frames           | uint64_t | 0 | logo显示的持续帧数 |
 | task_handle_process_info | TaskHandleProcessInfo‎ * | NULL | 推流任务控制信息 |
-|                          |          |            |                              |
-|                          |          |            |                              |
 
