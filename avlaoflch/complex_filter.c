@@ -3334,7 +3334,7 @@ AVFilterContext *mainsrc_ctx_point,*logo_ctx_point,*resultsink_ctx_point ;
                     AVRational logo_tb = {0};
                     AVRational logo_fr = {0};
                                         AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg/doc/examples/laoflch-mc-log.png",&logo_tb,&logo_fr);
-                    avfilter_register_all();
+                    //avfilter_register_all();
                     //avfilter_register(ff_vf_fade2);
 
                     //初始化滤镜容器
@@ -6252,12 +6252,15 @@ AVFrame* get_frame_from_jpeg_or_png_file2(const char *filename,AVRational *logo_
         return NULL;
     }
 
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    pkt.data = NULL;
-    pkt.size = 0;
-    ret = av_read_frame(format_ctx, &pkt);
-    ret = avcodec_send_packet(av_codec_ctx, &pkt);
+    AVPacket *pkt=av_packet_alloc();
+    //av_init_packet(&pkt);
+    //pkt.data = NULL;
+    //pkt.size = 0;
+
+//printf("################## %d \n",&format_ctx);
+    ret = av_read_frame(format_ctx, pkt);
+
+    ret = avcodec_send_packet(av_codec_ctx, pkt);
     AVFrame *frame_2 = av_frame_alloc();
     ret = avcodec_receive_frame(av_codec_ctx, frame_2);
 
@@ -6443,8 +6446,12 @@ int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBuffer
         fprintf(stderr, "Failed to create specified HW device.\n");
         return err;
     }
+
+    ((AVHWFramesContext *)((*hw_device_ctx)->data))->format=AV_PIX_FMT_CUDA;
 //sleep(60);
     ctx->hw_device_ctx = av_buffer_ref(*hw_device_ctx);
+
+    //ff_decode_get_hw_frames_ctx(ctx,AV_HWDEVICE_TYPE_CUDA);
 
     return err;
 }
@@ -6482,6 +6489,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
 
     return err;
 }
+
 
 int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
 //AVFilterContext *ctx = inlink->dst;
@@ -6696,8 +6704,10 @@ int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ct
         goto end;
     }
 
+    
+    filter_graph->nb_threads=12;
+    filter_graph->thread_type=FF_THREAD_SLICE;
     *filter_graph_point=filter_graph;
-
     /* buffer audio source: the decoded frames from the decoder will be inserted here. */
     if (!dec_ctx->channel_layout)
         dec_ctx->channel_layout = av_get_default_channel_layout(dec_ctx->channels);
