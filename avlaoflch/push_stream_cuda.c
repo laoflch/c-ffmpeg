@@ -189,12 +189,13 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
           if (par->codec_type== AVMEDIA_TYPE_VIDEO||par->codec_type== AVMEDIA_TYPE_AUDIO){
 
-   ist->dec_ctx->thread_count=8;
+   ist->dec_ctx->thread_count=12;
    //av_log(ist->dec_ctx, AV_LOG_INFO, "codec capabilities:%d",ist->dec_ctx->codec->capabilities);
             ist->dec_ctx->active_thread_type=FF_THREAD_SLICE;
-          }
 //if(!av_dict_get(ist->decoder_opts,"threads",NULL,0))
-   //av_dict_set(&ist->decoder_opts,"threads","8",0);
+   av_dict_set(&ist->decoder_opts,"threads","12",0);
+          }
+
         if(par->codec_type==AVMEDIA_TYPE_VIDEO){
 
             ist->dec_ctx->pix_fmt=AV_PIX_FMT_CUDA;
@@ -348,9 +349,11 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
     printf("sample_fmt:%d par sample_fmt:%d\n",ost->enc_ctx->sample_fmt,par->format);
     if (codec_type== AVMEDIA_TYPE_VIDEO||codec_type== AVMEDIA_TYPE_AUDIO){
     //    ost->enc = avcodec_find_encoder_by_name("h264_nvenc");
-       ost->enc_ctx->thread_count=8;
+       ost->enc_ctx->thread_count=12;
    //av_log(ost->enc_ctx, AV_LOG_INFO, "codec capabilities:%d",ost->enc_ctx->codec->capabilities);
        ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
+//if(!av_dict_get(ost->encoder_opts,"threads",NULL,0))
+   av_dict_set(&(ost->encoder_opts),"threads","12",0);
     }
 //printf("**********************************88 %d \n",ost);
 
@@ -374,8 +377,8 @@ int init_filter_graph_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCode
                    return -1;
                }
 
-               filter_graph_point->nb_threads=8;
-               filter_graph_point->thread_type=FF_THREAD_FRAME;
+               filter_graph_point->nb_threads=12;
+               filter_graph_point->thread_type=FF_THREAD_SLICE;
 
                     // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
                                   //time_base 必须与输入的dec_ctx的time一致，字幕才能正常显示
@@ -611,7 +614,7 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
                    return -1;
                }
 
-               filter_graph_point->nb_threads=8;
+               filter_graph_point->nb_threads=12;
                filter_graph_point->thread_type=FF_THREAD_FRAME;
 
                     // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
@@ -631,7 +634,7 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
                                //"[result]format=yuv420p[result_2];" 
                                "[result]scale_cuda=format=p010[result_2];"
                                "[result_2]buffersink",
-                               frame->width, frame->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  frame->width/2,frame->height/2
+                               frame->width, frame->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  frame->width,frame->height
                                ,logo_frame->width,logo_frame->height,logo_frame->format,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den
                                //frame->width-logo_frame->width,frame->height-logo_frame->height
                                                           //,1920,808
@@ -762,7 +765,9 @@ par->hw_frames_ctx=frame->hw_frames_ctx;
 (*enc_ctx)->hw_device_ctx=dec_ctx->hw_device_ctx;
 
 (*enc_ctx)->hw_frames_ctx=frame->hw_frames_ctx;
-            if ((ret = avcodec_open2(*enc_ctx, (*enc_ctx)->codec, NULL)) < 0) {
+
+av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
+            if ((ret = avcodec_open2(*enc_ctx, (*enc_ctx)->codec,&output_streams[0]->encoder_opts )) < 0) {
   
                av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
                           }  
@@ -786,7 +791,7 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->wid
     AVDictionary* options = NULL;
 
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "83886000", 0);
+    av_dict_set(&options, "buffer_size", "8388600", 0);
 
     //写入流头部信息
     ret = avformat_write_header(ofmt_ctx, &options);
@@ -941,7 +946,7 @@ av_frame_unref(frame);
                 //    frame->pict_type=frame_pict_type;
                  //   frame->key_frame=frame_key;
 
-           
+         
                    ret_enc = avcodec_send_frame(*enc_ctx, frame);
 av_frame_unref(frame);
              //   } 
@@ -962,7 +967,7 @@ av_frame_unref(frame);
                      ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
 
                      if (ret_enc == AVERROR(EAGAIN)) {
-//printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
+printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
                          av_frame_unref(frame);
                          if (filter_graph_des->if_hw){
                              av_frame_free(&sw_frame);
@@ -980,7 +985,7 @@ av_frame_unref(frame);
                          break; 
                      }
 
-
+  //printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&2 \n");
                      if (out_pkt->data!=NULL) {
 
                          //out_pkt->pts=pkt->pts;
@@ -1167,7 +1172,7 @@ pkt->stream_index=s_stream_index;
 //
      // out_pkt->pts=pkt->pts;
 
-out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
+out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time+AV_TIME_BASE*0.08;
  //printf("####################3\n");
       out_pkt->duration=pkt->duration;
     
@@ -1509,7 +1514,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     AVDictionary* options = NULL;
 
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "83886000", 0);
+    av_dict_set(&options, "buffer_size", "838860000", 0);
 
   
     stream_mapping_size = ifmt_ctx->nb_streams;
@@ -1655,8 +1660,8 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 
               }*/
 
-              enc_ctx->width=1920;
-              enc_ctx->height=808;
+              enc_ctx->width=3840;
+              enc_ctx->height=1616;
                         
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
 
@@ -1706,13 +1711,13 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
                 enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
 
                 av_log(NULL,AV_LOG_DEBUG,"audio stream time base:{%d %d} sample_rate:%d channel_layout:%d channels:%d\n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->sample_rate,enc_ctx->channel_layout,enc_ctx->channels);
-                enc_ctx->strict_std_compliance=-2;
+                //enc_ctx->strict_std_compliance=-2;
                 //rtsp只支持acc音频编码,acc编码的采样格式为flp
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
                 //设置音频滤镜描述 
                 AVBPrint arg;
                 av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
-                av_bprintf(&arg, "aresample=%d,aformat=sample_fmts=%s",enc_ctx->sample_rate,av_get_sample_fmt_name(enc_ctx->sample_fmt));
+                av_bprintf(&arg, "aformat=sample_fmts=%s",av_get_sample_fmt_name(enc_ctx->sample_fmt));
                 afilters_descr=arg.str;
 
 
@@ -1724,7 +1729,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
             if(in_codecpar->codec_type!=AVMEDIA_TYPE_VIDEO){
            /*打开编码Context
             */
-            if ((ret = avcodec_open2(enc_ctx, output_stream->enc, NULL)) < 0) {
+            if ((ret = avcodec_open2(enc_ctx, output_stream->enc,&output_stream->encoder_opts )) < 0) {
                   av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
                  goto end;
             }  
@@ -1781,6 +1786,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 // ret=handle_seek(ifmt_ctx,task_handle_process_info->control->seek_time );
 //task_handle_process_info->control->seek_time=0x00;
     //循环读取packet,直到接到任务取消信号
+    int count_1,count_2=0;
     while (!task_handle_process_info->control->task_cancel) {
 
    /*处理控制速度
@@ -1789,7 +1795,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
         if (rate_emu) {
             bool if_read_packet=true;
 
-            for (i = 0; i < nb_input_streams; i++) {
+            for (i = 0; i < 1; i++) {
 
                 ist = input_streams[i];
                 int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
@@ -1800,22 +1806,32 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 //
 
 if(i==0){
-                if (pts > now+AV_TIME_BASE){
+                if (pts > now+AV_TIME_BASE*150){
                     if_read_packet=false;
+ //printf("************************* count_1:%d \n",count_1);
+
+                    //count_1++;
                     break;
                 }
 
                 
-}else{
- if (pts > now+AV_TIME_BASE*5000){
+}/*else{
+// if (pts > now+(input_streams[1]->start-input_streams[0]->start)-1){
+ if (pts > now){
                     if_read_packet=false;
+ //printf("************************* count_2:%d  %"PRId64"\n",count_2,now+(input_streams[1]->start-input_streams[0]->start));
+                    count_2++;
                     break;
                 }
 
-}};
+}*/
+};
             if (!if_read_packet){
+             // printf("************************* %d %d  %f \n",count_1,count_2,0);
                              continue;
             }
+
+count_1=count_2=0;
         };
 
       /*处理暂停*/

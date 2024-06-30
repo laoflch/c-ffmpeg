@@ -6706,7 +6706,7 @@ int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ct
 
     
     filter_graph->nb_threads=12;
-    filter_graph->thread_type=FF_THREAD_SLICE;
+    filter_graph->thread_type=FF_THREAD_FRAME;
     *filter_graph_point=filter_graph;
     /* buffer audio source: the decoded frames from the decoder will be inserted here. */
     if (!dec_ctx->channel_layout)
