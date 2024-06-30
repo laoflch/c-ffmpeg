@@ -1172,7 +1172,8 @@ pkt->stream_index=s_stream_index;
 //
      // out_pkt->pts=pkt->pts;
 
-out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time+AV_TIME_BASE*0.08;
+//out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time+AV_TIME_BASE*0.08;
+out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
  //printf("####################3\n");
       out_pkt->duration=pkt->duration;
     
@@ -1792,12 +1793,12 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
    /*处理控制速度
          */
         
-        if (rate_emu) {
+        if (rate_emu&&input_streams[0]) {
             bool if_read_packet=true;
 
-            for (i = 0; i < 1; i++) {
+            //for (i = 0; i < 1; i++) {
 
-                ist = input_streams[i];
+                ist = input_streams[0];
                 int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
                 int64_t current_timestap=av_gettime_relative();
                 int64_t now = current_timestap-ist->start;
@@ -1805,17 +1806,20 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 //
 //
 
-if(i==0){
-                if (pts > now+AV_TIME_BASE*150){
+//if(i==0){
+//控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
+int cache_time=0.5;//-1 - 1
+  //TS设置缓冲1个AV_TIME_BASE
+                if (pts > now+AV_TIME_BASE*cache_time){
                     if_read_packet=false;
  //printf("************************* count_1:%d \n",count_1);
 
                     //count_1++;
-                    break;
+//                    break;
                 }
 
                 
-}/*else{
+/*}else{
 // if (pts > now+(input_streams[1]->start-input_streams[0]->start)-1){
  if (pts > now){
                     if_read_packet=false;
@@ -1825,7 +1829,7 @@ if(i==0){
                 }
 
 }*/
-};
+//};
             if (!if_read_packet){
              // printf("************************* %d %d  %f \n",count_1,count_2,0);
                              continue;
