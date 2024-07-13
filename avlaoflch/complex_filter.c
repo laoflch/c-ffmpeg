@@ -44,8 +44,12 @@
 //#include <libavfilter/drawutils.h>
 #include <libavutil/imgutils.h>
 #include <stdio.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <ass/ass.h>
+#include <ass/ass_types.h>
+
 #include <string.h>
 #include <libavutil/intreadwrite.h>
 #include <libavutil/pixdesc.h>
@@ -1480,14 +1484,20 @@ int config_input(AssContext *ass, int format,int w,int h)
     //AssContext *ass = inlink->dst->priv;
 //printf("alpha flags:%d\n",ass->alpha);
     ff_draw_init(&ass->draw, format, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
+printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d %d %d \n",w,h,FFMIN(INT_MAX, SIZE_MAX)/h,ass->renderer);
+    ass_set_frame_size(ass->renderer, w, h);
 
-    ass_set_frame_size  (ass->renderer, w, h);
+//printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",13,ass->renderer);
+//
+//sleep(5);
     if (ass->original_w && ass->original_h) {
         ass_set_aspect_ratio(ass->renderer, (double)w / h,
                              (double)ass->original_w / ass->original_h);
+       
 #if LIBASS_VERSION > 0x01010000
         ass_set_storage_size(ass->renderer, ass->original_w, ass->original_h);
     } else {
+ //printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",14,ass->renderer);
         ass_set_storage_size(ass->renderer, w, h);
 #endif
     }
@@ -4148,7 +4158,7 @@ av_cold int init(AssContext *ass)
     ass_set_message_cb(ass->library, ass_log, NULL);
 
     ass_set_fonts_dir(ass->library, ass->fontsdir);
-//printf("$$$$#$$$$#$$$$#------------$$$$#$$$#\n");
+printf("$$$$#$$$$#$$$$#------------$$$$#$$$#\n");
     ass->renderer = ass_renderer_init(ass->library);
     if (!ass->renderer) {
         av_log(NULL, AV_LOG_ERROR, "Could not initialize libass renderer.\n");
@@ -4311,7 +4321,22 @@ void ff_blend_mask(FFDrawContext *draw, FFDrawColor *color,
     }
 }
 */
- void overlay_ass_image(AssContext *ass, AVFrame *picref,
+
+ void overlay_ass_image_cuda(AssContext *ass, AVFrame *picref,
+                              const ASS_Image *image)
+{
+    for (; image; image = image->next) {
+        uint8_t rgba_color[] = {AR(image->color), AG(image->color), AB(image->color), AA(image->color)};
+        FFDrawColor color;
+        ff_draw_color(&ass->draw, &color, rgba_color);
+        ff_blend_mask(&ass->draw, &color,
+                      picref->data, picref->linesize,
+                      picref->width, picref->height,
+                      image->bitmap, image->stride, image->w, image->h,
+                      3, 0, 0, 0);
+    }
+}
+void overlay_ass_image(AssContext *ass, AVFrame *picref,
                               const ASS_Image *image)
 {
     for (; image; image = image->next) {
@@ -4325,6 +4350,7 @@ void ff_blend_mask(FFDrawContext *draw, FFDrawColor *color,
                       3, 0, image->dst_x, image->dst_y);
     }
 }
+
 
 int push_video_to_rtsp_subtitle_logo2(const char *video_file_path, const int video_index, const int audio_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
 
@@ -6516,6 +6542,8 @@ int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
     return 0;
 
 }
+
+
 
 
 void filter_rgba( const AVFrame *frame,

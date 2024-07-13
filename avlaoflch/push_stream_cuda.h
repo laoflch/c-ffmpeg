@@ -35,7 +35,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams );
 
 
-
+int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base);
 //int handle_sub(AVFrame *frame,AssContext *ass,AVRational time_base);
 
 #endif /*PUSH_STREAM_LAOFLCH_H*/

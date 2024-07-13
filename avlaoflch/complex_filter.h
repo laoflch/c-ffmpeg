@@ -47,6 +47,8 @@ typedef struct AssContext {
     FFDrawContext draw;
 } AssContext;
 
+
+
 typedef struct BufferSourceContext {
     const AVClass    *class;
     AVFifoBuffer     *fifo;
@@ -134,6 +136,8 @@ typedef struct FilterGraph {
     const char    *graph_desc;
 
     AVFrame **logo_frame;
+    AVFrame **subtitle_frame;
+    AVFrame **subtitle_empty_frame;
 
     AVFilterGraph *graph;
     int reconfiguration;
@@ -502,6 +506,7 @@ int handle_logo_fade(AVFrame *frame,uint64_t duration_frames,uint64_t interval_f
 av_cold int init(AssContext *ass);
 av_cold int init_subtitles( AssContext *ass );
 int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base);
+
 static int attachment_is_font(AVStream * st);
 static void overlay_ass_image(AssContext *ass, AVFrame *picref,
                               const ASS_Image *image);

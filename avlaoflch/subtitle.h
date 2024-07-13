@@ -6,6 +6,7 @@
 #include <libavutil/pixdesc.h>
 
 #include <libavfilter/avfilter.h>
+
 //#include <libavfilter/vf_overlay.h>
 //
 
@@ -97,7 +98,7 @@ OverlayContext  *init_overlay_context(int frame_fmt);
 SubtitleFrame *alloc_subtitle_frame();
 image_t *gen_image(int width, int height);
 void free_subtitle_frame(SubtitleFrame *subtitle_frame);
-AVFrame *gen_empty_layout_frame(int width, int height);
+int gen_empty_layout_frame(AVFrame **frame,int width, int height);
 void blend(image_t * frame, ASS_Image *img);
 
 

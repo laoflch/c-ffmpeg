@@ -9,6 +9,8 @@
 #include "subtitle.h"
 #include <libavutil/attributes.h>
 #include <libavutil/cpu.h>
+#include "drawutils.h"
+
 //#include "x86/cpu.h"
 //#include "libavfilter/vf_overlay.h"
 
@@ -183,17 +185,56 @@ dst=frame->buffer;
         dst += frame->stride;
     }
 }
+static void blend_single2(image_t * frame, ASS_Image *img)
+{
+    int x, y;
+    unsigned char opacity = 255 - _a(img->color);
+    unsigned char r = _r(img->color);
+    unsigned char g = _g(img->color);
+    unsigned char b = _b(img->color);
 
+    unsigned char *src;
+    unsigned char *dst;
+
+    src = img->bitmap;
+ printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d\n",img->w,img->stride,img->h);
+    //dst = frame->buffer + (img->dst_y-(origin_h-frame->height)) * frame->stride + img->dst_x * 4;
+//dst = frame->buffer + img->dst_y * frame->stride + img->dst_x * 4;
+dst=frame->buffer;
+    for (y = 0; y < img->h; ++y) {
+// printf("qqqqqqqqqqqqqqqqqqqqqqqq2\n");
+        for (x = 0; x < img->w; ++x) {
+            unsigned k = ((unsigned) src[x]) * opacity / 255;
+            // possible endianness problems
+            dst[x * 4+3] = (k * opacity ) / 255;
+            dst[x * 4] = (k * b ) / 255;
+            dst[x *  4+ 1] = (k * g ) / 255;
+            dst[x * 4 + 2] = (k * r ) / 255;
+        }
+        src += img->stride;
+        dst += frame->stride;
+    }
+}
 void blend(image_t * frame, ASS_Image *img)
 {
     int cnt = 0;
-    while (img) {
-        blend_single(frame, img);
+    ASS_Image *new_img=img;
+    while (new_img) {
+        blend_single2(frame, new_img);
         ++cnt;
-        img = img->next;
+
+        //old_img=img;
+        new_img = new_img->next;
+//if(old_img)free(old_img);
+
     }
-    printf("%d images blended\n", cnt);
+
+    //if(img)free(img);
+
+        printf("%d images blended\n", cnt);
 }
+
+
 
 char *font_provider_labels[] = {
     [ASS_FONTPROVIDER_NONE]       = "None",
@@ -521,4 +562,119 @@ SubtitleFrame *alloc_subtitle_frame(){
 
 }
 
+image_t * gen_image(int width, int height)
+{
+    image_t *img = (image_t *)malloc(sizeof(image_t));
+    img->width = width;
+    img->height = height;
+    img->stride = width * 4;
+    img->buffer = calloc(1,img->height*img->stride);
 
+    printf("memset buffer \n");
+    memset(img->buffer, 0x00, img->stride * img->height);
+
+    //for(int i=0;i<img->height*img->stride;i++){
+
+    //memset(img->buffer+i*img->stride, 0x01, 1);
+
+    //}
+    //for (int i = 0; i < height * width * 3; ++i)
+    // img->buffer[i] = (i/3/50) % 100;
+    return img;
+}
+
+
+int gen_empty_layout_frame(AVFrame **frame,int width, int height)
+{
+
+   int ret;
+//if (*frame)
+ //  if(frame){
+   image_t *img=gen_image(width,height);
+   AVFrame *tmp_frame;
+                tmp_frame=av_frame_alloc();
+ 
+                
+
+                tmp_frame->width=width;
+                tmp_frame->height=height;
+                //tmp_frame->format=logo_frame->format;
+                tmp_frame->format=AV_PIX_FMT_RGBA;
+                ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
+                //free(img->buffer);
+                //
+                //
+               *frame=tmp_frame; 
+                //av_frame_unref(frame);
+                //av_frame_move_ref(frame,tmp_frame);
+
+                //av_frame_free(&tmp_frame);
+                //
+  printf("memset buffer2 %d \n",tmp_frame);
+
+                return 0;
+
+
+}
+
+int gen_empty_layout_frame_yuva420p(AVFrame **frame,int width, int height)
+{
+
+   int ret;
+//if (*frame)
+ //  if(frame){
+   image_t *img=gen_image(width,height);
+   AVFrame *tmp_frame;
+                tmp_frame=av_frame_alloc();
+ 
+                
+
+                tmp_frame->width=width;
+                tmp_frame->height=height;
+                //tmp_frame->format=logo_frame->format;
+                tmp_frame->format=AV_PIX_FMT_RGBA;
+                ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
+                //free(img->buffer);
+                //
+                //
+                //
+    struct SwsContext *cacheContext=sws_getCachedContext(NULL,width,height,AV_PIX_FMT_RGBA,width,height,AV_PIX_FMT_YUVA420P,0x2,NULL,NULL,NULL);
+
+   //     AVFrame *tmp_frame=av_frame_alloc();
+    //    tmp_frame->width=img->width;
+     //   tmp_frame->height=img->height;
+      //  tmp_frame->format=AV_PIX_FMT_RGBA;
+
+       // ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,AV_PIX_FMT_RGBA,img->width,img->height,1);
+       //if (ret<0){
+        //             printf("Error: copy logo frame failed:%d \n",ret);
+
+         //       }
+
+        AVFrame *result_frame=av_frame_alloc();
+        result_frame->width=img->width;
+        result_frame->height=img->height;
+        result_frame->format=AV_PIX_FMT_YUVA420P;
+        //ret=av_frame_get_buffer(result_frame,1);
+        //if (ret<0){
+         //   av_log(NULL,AV_LOG_FATAL,"no memory %d\n",ret);
+          //  return ret;
+        //}
+
+
+        //overlay_frame->format=AV_PIX_FMT_RGBA;
+
+        sws_scale(cacheContext,(const uint8_t * const)tmp_frame->data,tmp_frame->linesize,0,tmp_frame->height,result_frame->data,result_frame->linesize);
+
+               *frame=tmp_frame; 
+                //av_frame_unref(frame);
+                //av_frame_move_ref(frame,tmp_frame);
+
+                //av_frame_free(&tmp_frame);
+                //
+  printf("memset buffer2 %d \n",tmp_frame);
+
+                return 0;
+
+
+}
