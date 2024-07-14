@@ -197,7 +197,7 @@ static void blend_single2(image_t * frame, ASS_Image *img)
     unsigned char *dst;
 
     src = img->bitmap;
- printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d\n",img->w,img->stride,img->h);
+ printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d %d\n",img->w,img->stride,img->h,img->dst_x);
     //dst = frame->buffer + (img->dst_y-(origin_h-frame->height)) * frame->stride + img->dst_x * 4;
 //dst = frame->buffer + img->dst_y * frame->stride + img->dst_x * 4;
 dst=frame->buffer;

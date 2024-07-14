@@ -602,14 +602,48 @@ int get_img_empty_stride(ASS_Image *img){
  
 }
 
+int convert_rgba_to_yuva420p(AVFrame **frame){
+          int ret;
+          AVFrame *yuva_frame=av_frame_alloc();
+
+          yuva_frame->width=(*frame)->width;
+          yuva_frame->height=(*frame)->height;
+          yuva_frame->format=AV_PIX_FMT_YUVA420P;
+
+          ret=av_frame_get_buffer(yuva_frame, 0);
+          if (ret<0){
+              printf("Error: fill new logo frame failed:%d \n",ret);
+
+          }
+
+
+ struct SwsContext *sws_ctx= sws_getContext((*frame)->width,(*frame)->height,AV_PIX_FMT_RGBA,(*frame)->width , (*frame)->height,AV_PIX_FMT_YUVA420P,SWS_BILINEAR,NULL,NULL,NULL);
+
+          
+          sws_scale(sws_ctx,(const uint8_t * const)(*frame)->data,(*frame)->linesize,0,(*frame)->height,yuva_frame->data,yuva_frame->linesize);
+          sws_freeContext(sws_ctx);
+
+          av_frame_free(frame);
+
+
+          *frame=yuva_frame;
+
+
+         
+  
+          
+
+
+}
+
 int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base,bool *if_empty_subtitle){
 //AVFilterContext *ctx = inlink->dst;
  //   AVFilterLink *outlink = ctx->outputs[0];
     //AssContext *ass = ctx->priv;
     int detect_change = 0;
 //if(frame){
-    double time_ms = 42540+pts * av_q2d(time_base) * 1000;
-    //double time_ms=42540;
+    //double time_ms = 42540+pts * av_q2d(time_base) * 1000;
+    double time_ms=55220;
   printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
  printf("*************889 %d \n",ass->renderer);
@@ -639,6 +673,8 @@ if(!(*if_empty_subtitle) && *frame){
   av_frame_free(frame);
 }
 int ret=blend_ass_image(ass, frame, image);
+
+convert_rgba_to_yuva420p(frame);
    // return ret;
     }
 *if_empty_subtitle=false;
@@ -812,7 +848,7 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                                "[result_2]buffersink",
                                frame->width, frame->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  frame->width,frame->height
                                ,logo_frame->width,logo_frame->height,AV_PIX_FMT_RGBA,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den,
-1600, 96,AV_PIX_FMT_RGBA, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den
+1600, 96,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den
                                //frame->width-logo_frame->width,frame->height-logo_frame->height
                                                           //,1920,808
                  );
@@ -1069,7 +1105,7 @@ printf("subtitle2 x:%d y:%d\n",(*(filter_graph_des->subtitle_frame))->width,(*(f
     //memset(subtitle_buffersrc_par,0,sizeof(*subtitle_buffersrc_par));
                 subtitle_buffersrc_par->width=(*(filter_graph_des->subtitle_frame))->width;
                 subtitle_buffersrc_par->height=(*(filter_graph_des->subtitle_frame))->height;
-                subtitle_buffersrc_par->format=AV_PIX_FMT_RGBA;
+                subtitle_buffersrc_par->format=AV_PIX_FMT_YUVA420P;
 
   //              }
   //
