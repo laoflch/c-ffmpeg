@@ -1483,8 +1483,10 @@ int config_input(AssContext *ass, int format,int w,int h)
 {
     //AssContext *ass = inlink->dst->priv;
 //printf("alpha flags:%d\n",ass->alpha);
-    ff_draw_init(&ass->draw, format, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
-printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d %d %d \n",w,h,FFMIN(INT_MAX, SIZE_MAX)/h,ass->renderer);
+//
+    //这个ff_draw_init必须注销，不然会出现ass_frame_render出现空指针的段错误
+    //ff_draw_init(&ass->draw, format, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
+//printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d %d %d \n",w,h,FFMIN(INT_MAX, SIZE_MAX)/h,ass->renderer);
     ass_set_frame_size(ass->renderer, w, h);
 
 //printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",13,ass->renderer);
@@ -1501,6 +1503,8 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d %d %d \n",w,h,FFMIN(INT_MAX, SIZE_MAX)/
         ass_set_storage_size(ass->renderer, w, h);
 #endif
     }
+//ass_set_storage_size(ass->renderer, w, h);
+//printf("@@@@@@@@@@@@@@@@@@@@@@@2352 %d %d \n",14,ass->renderer);
 
     if (ass->shaping != -1)
         ass_set_shaper(ass->renderer, ass->shaping);
@@ -4078,22 +4082,23 @@ end:
 av_cold int init_ass(AssContext *ass)
 {
     //AssContext *ass = ctx->priv;
-    int ret = init(ass);
+    //int ret = init(ass);
 
-    if (ret < 0)
-        return ret;
+    //if (ret < 0)
+    //    return ret;
 
     /* Initialize fonts */
-    ass_set_fonts(ass->renderer, NULL, NULL, 1, NULL, 1);
-
-    ass->track = ass_read_file(ass->library, ass->filename, NULL);
+    ass_set_fonts(ass->renderer, NULL, "sans-serif", ASS_FONTPROVIDER_AUTODETECT, NULL, 1);
+//printf("set fonts:%d \n",ass->renderer);
+ ass->track = ass_read_file(ass->library, ass->filename, NULL);
     if (!ass->track) {
         av_log(ass, AV_LOG_ERROR,
                "Could not create a libass track when reading file '%s'\n",
                ass->filename);
         return AVERROR(EINVAL);
     }
-    return 0;
+
+       return 0;
 }
 
 static const int ass_libavfilter_log_level_map[] = {
@@ -4132,12 +4137,16 @@ static int attachment_is_font(AVStream * st)
 
 static void ass_log(int ass_level, const char *fmt, va_list args, void *ctx)
 {
-    const int ass_level_clip = av_clip(ass_level, 0,
-        FF_ARRAY_ELEMS(ass_libavfilter_log_level_map) - 1);
-    const int level = ass_libavfilter_log_level_map[ass_level_clip];
+  printf("libasss:");
+  vprintf(fmt, args);
+  printf("\n");
+  
+    //const int ass_level_clip = av_clip(ass_level, 0,
+     //   FF_ARRAY_ELEMS(ass_libavfilter_log_level_map) - 1);
+    //const int level = ass_libavfilter_log_level_map[ass_level_clip];
 
-    av_vlog(ctx, level, fmt, args);
-    av_log(ctx, level, "\n");
+    //av_vlog(ctx, level, fmt, args);
+    //av_log(ctx, level, "\n");
 }
 
 av_cold int init(AssContext *ass)
@@ -4156,8 +4165,9 @@ av_cold int init(AssContext *ass)
     }
 
     ass_set_message_cb(ass->library, ass_log, NULL);
-
+   
     ass_set_fonts_dir(ass->library, ass->fontsdir);
+    ass_set_extract_fonts(ass->library, 1);
 printf("$$$$#$$$$#$$$$#------------$$$$#$$$#\n");
     ass->renderer = ass_renderer_init(ass->library);
     if (!ass->renderer) {
@@ -6515,7 +6525,6 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
 
     return err;
 }
-
 
 int handle_subtitle(AVFrame *frame,AssContext *ass,AVRational time_base){
 //AVFilterContext *ctx = inlink->dst;

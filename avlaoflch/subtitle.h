@@ -45,6 +45,8 @@ enum SubtitleType {
     SUBTITLE_TYPE_PGS
 
 };
+
+
 typedef struct OverlayContext {
     const AVClass *class;
     int x, y;                   ///< position of overlaid picture

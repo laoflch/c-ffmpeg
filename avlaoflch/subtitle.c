@@ -231,7 +231,7 @@ void blend(image_t * frame, ASS_Image *img)
 
     //if(img)free(img);
 
-        printf("%d images blended\n", cnt);
+       // printf("%d images blended\n", cnt);
 }
 
 
@@ -617,64 +617,4 @@ int gen_empty_layout_frame(AVFrame **frame,int width, int height)
 
 }
 
-int gen_empty_layout_frame_yuva420p(AVFrame **frame,int width, int height)
-{
 
-   int ret;
-//if (*frame)
- //  if(frame){
-   image_t *img=gen_image(width,height);
-   AVFrame *tmp_frame;
-                tmp_frame=av_frame_alloc();
- 
-                
-
-                tmp_frame->width=width;
-                tmp_frame->height=height;
-                //tmp_frame->format=logo_frame->format;
-                tmp_frame->format=AV_PIX_FMT_RGBA;
-                ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
-                //free(img->buffer);
-                //
-                //
-                //
-    struct SwsContext *cacheContext=sws_getCachedContext(NULL,width,height,AV_PIX_FMT_RGBA,width,height,AV_PIX_FMT_YUVA420P,0x2,NULL,NULL,NULL);
-
-   //     AVFrame *tmp_frame=av_frame_alloc();
-    //    tmp_frame->width=img->width;
-     //   tmp_frame->height=img->height;
-      //  tmp_frame->format=AV_PIX_FMT_RGBA;
-
-       // ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,AV_PIX_FMT_RGBA,img->width,img->height,1);
-       //if (ret<0){
-        //             printf("Error: copy logo frame failed:%d \n",ret);
-
-         //       }
-
-        AVFrame *result_frame=av_frame_alloc();
-        result_frame->width=img->width;
-        result_frame->height=img->height;
-        result_frame->format=AV_PIX_FMT_YUVA420P;
-        //ret=av_frame_get_buffer(result_frame,1);
-        //if (ret<0){
-         //   av_log(NULL,AV_LOG_FATAL,"no memory %d\n",ret);
-          //  return ret;
-        //}
-
-
-        //overlay_frame->format=AV_PIX_FMT_RGBA;
-
-        sws_scale(cacheContext,(const uint8_t * const)tmp_frame->data,tmp_frame->linesize,0,tmp_frame->height,result_frame->data,result_frame->linesize);
-
-               *frame=tmp_frame; 
-                //av_frame_unref(frame);
-                //av_frame_move_ref(frame,tmp_frame);
-
-                //av_frame_free(&tmp_frame);
-                //
-  printf("memset buffer2 %d \n",tmp_frame);
-
-                return 0;
-
-
-}

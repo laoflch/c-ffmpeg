@@ -29,7 +29,10 @@
 #include "complex_filter.h"
 #include "push_stream.h"
 #include "subtitle.h"
+#include "ass/ass.h"
+#include <ass/ass_types.h>
 
+#define ENCODE_ALIGN_BITS 0x40
 #define R 0
 #define G 1
 #define B 2
@@ -198,11 +201,11 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
           if (par->codec_type== AVMEDIA_TYPE_VIDEO||par->codec_type== AVMEDIA_TYPE_AUDIO){
 
-   ist->dec_ctx->thread_count=12;
+   ist->dec_ctx->thread_count=8;
    //av_log(ist->dec_ctx, AV_LOG_INFO, "codec capabilities:%d",ist->dec_ctx->codec->capabilities);
             ist->dec_ctx->active_thread_type=FF_THREAD_SLICE;
 //if(!av_dict_get(ist->decoder_opts,"threads",NULL,0))
-   av_dict_set(&ist->decoder_opts,"threads","12",0);
+   av_dict_set(&ist->decoder_opts,"threads","8",0);
           }
 
         if(par->codec_type==AVMEDIA_TYPE_VIDEO){
@@ -358,11 +361,11 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
     printf("sample_fmt:%d par sample_fmt:%d\n",ost->enc_ctx->sample_fmt,par->format);
     if (codec_type== AVMEDIA_TYPE_VIDEO||codec_type== AVMEDIA_TYPE_AUDIO){
     //    ost->enc = avcodec_find_encoder_by_name("h264_nvenc");
-       ost->enc_ctx->thread_count=12;
+       ost->enc_ctx->thread_count=8;
    //av_log(ost->enc_ctx, AV_LOG_INFO, "codec capabilities:%d",ost->enc_ctx->codec->capabilities);
        ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
 //if(!av_dict_get(ost->encoder_opts,"threads",NULL,0))
-   av_dict_set(&(ost->encoder_opts),"threads","12",0);
+   av_dict_set(&(ost->encoder_opts),"threads","8",0);
     }
 //printf("**********************************88 %d \n",ost);
 
@@ -386,7 +389,7 @@ int init_filter_graph_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCode
                    return -1;
                }
 
-               filter_graph_point->nb_threads=12;
+               filter_graph_point->nb_threads=8;
                filter_graph_point->thread_type=FF_THREAD_SLICE;
 
                     // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
@@ -513,12 +516,83 @@ for(int i=0;i<filter_graph_point->nb_filters;i++){
 
 
 }
+int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base,bool *if_empty_subtitle){
+//AVFilterContext *ctx = inlink->dst;
+ //   AVFilterLink *outlink = ctx->outputs[0];
+    //AssContext *ass = ctx->priv;
+    int detect_change = 0;
+//if(frame){
+    double time_ms = pts * av_q2d(time_base) * 1000;
+    //double time_ms=55220;
+  //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
+   if(ass&&ass->renderer&&ass->track) {
+ //printf("*************889 %d \n",ass->renderer);
+    ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
+
+       if(image){
+
+    if (detect_change){
+        av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
+
+    //AVFrame *frame=gen_empty_layout_frame(100, 100);a
+   //frame->width=image->w;
+   //frame->height=image->h;
+                //tmp_frame->format=logo_frame->format;
+    //            frame->format=AV_PIX_FMT_YUVA420P;
+
+   //int ret= gen_empty_layout_frame(frame,image->w,image->h);
+   //
+       
+  //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
+    //overlay_ass_image_cuda(ass, *frame, image);
+  //                  printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
+if(!(*if_empty_subtitle) && *frame){
+  //printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
+
+  av_frame_unref(*frame);
+  av_frame_free(frame);
+}
+int ret=blend_ass_image(ass, frame, image);
+
+convert_rgba_to_yuva420p(frame);
+   // return ret;
+    }
+*if_empty_subtitle=false;
+ //printf("*************889 %d %d \n",frame,*frame);
+return 0;
+
+    
+       }else{
+//frame->width=100;
+ //  frame->height=100;
+                //tmp_frame->format=logo_frame->format;
+  //              frame->format=AV_PIX_FMT_YUVA420P;
+
+ //int ret= gen_empty_layout_frame(frame,100,100);
+ //
+   *if_empty_subtitle=true;
+return 0;
+   }
+
+
+   }else{
+ //int ret= gen_empty_layout_frame(frame,100,100);
+return 0;
+   }
+    return -1;
+
+//}else{
+//printf("gen empty layout fail frame is empty \n");  
+//}
+}
+
+
 int blend_ass_image(AssContext *ass,AVFrame **frame, ASS_Image *img)
 {
     int cnt = 0;
 
     AVFrame *tmp_frame=NULL;
-printf("addres frame:%d %d\n",*frame,frame);
+//printf("addres frame:%d %d\n",*frame,frame);
     //img=img->next->next;
     /*while (img) {
 
@@ -573,7 +647,7 @@ image_t *img_empty=gen_image(img->stride,img->h);
     img_tmp=img_tmp->next; 
 
    }
- printf("max stride size:%d %d \n",max_stride,max_height);
+ //printf("max stride size:%d %d \n",max_stride,max_height);
 
 image_t *img_empty=gen_image(max_stride,max_height);
 
@@ -584,8 +658,8 @@ tmp_frame=av_frame_alloc();
                 tmp_frame->format=AV_PIX_FMT_RGBA;
 blend(img_empty, img);
                 int ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img_empty->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
- printf("stride size:%d %d \n",tmp_frame->linesize[0],img->stride);
-         //free(img_empty->buffer);
+ //printf("stride size:%d %d \n",tmp_frame->linesize[0],img->stride);
+         free(img_empty->buffer);
          free(img_empty);
                  //free(img);
 
@@ -597,9 +671,33 @@ blend(img_empty, img);
     return 0;
 }
 
-int get_img_empty_stride(ASS_Image *img){
+int gen_empty_layout_frame_yuva420p(AVFrame **frame,int width, int height)
+{
 
+   int ret;
+//if (*frame)
+ //  if(frame){
+   image_t *img=gen_image(width,height);
+   AVFrame *tmp_frame;
+                tmp_frame=av_frame_alloc();
  
+                
+
+                tmp_frame->width=width;
+                tmp_frame->height=height;
+                //tmp_frame->format=logo_frame->format;
+                tmp_frame->format=AV_PIX_FMT_RGBA;
+                ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
+                //free(img->buffer);
+              // printf("yuva420p1 w:%d h:%d\n",(tmp_frame)->width,(tmp_frame)->height);
+               *frame=tmp_frame; 
+                //
+                //
+                //
+               convert_rgba_to_yuva420p(frame) ;
+                   return 0;
+
+
 }
 
 int convert_rgba_to_yuva420p(AVFrame **frame){
@@ -609,7 +707,7 @@ int convert_rgba_to_yuva420p(AVFrame **frame){
           yuva_frame->width=(*frame)->width;
           yuva_frame->height=(*frame)->height;
           yuva_frame->format=AV_PIX_FMT_YUVA420P;
-
+          printf("yuva420p w:%d h:%d\n",(*frame)->width,(*frame)->height);
           ret=av_frame_get_buffer(yuva_frame, 0);
           if (ret<0){
               printf("Error: fill new logo frame failed:%d \n",ret);
@@ -636,75 +734,6 @@ int convert_rgba_to_yuva420p(AVFrame **frame){
 
 }
 
-int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base,bool *if_empty_subtitle){
-//AVFilterContext *ctx = inlink->dst;
- //   AVFilterLink *outlink = ctx->outputs[0];
-    //AssContext *ass = ctx->priv;
-    int detect_change = 0;
-//if(frame){
-    //double time_ms = 42540+pts * av_q2d(time_base) * 1000;
-    double time_ms=55220;
-  printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
-   if(ass&&ass->renderer&&ass->track) {
- printf("*************889 %d \n",ass->renderer);
-    ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
-
-       if(image){
-
-    if (detect_change){
-        av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
-
-    //AVFrame *frame=gen_empty_layout_frame(100, 100);a
-   //frame->width=image->w;
-   //frame->height=image->h;
-                //tmp_frame->format=logo_frame->format;
-    //            frame->format=AV_PIX_FMT_YUVA420P;
-
-   //int ret= gen_empty_layout_frame(frame,image->w,image->h);
-   //
-       
-  //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
-    //overlay_ass_image_cuda(ass, *frame, image);
-                    printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
-if(!(*if_empty_subtitle) && *frame){
-  printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
-
-  av_frame_unref(*frame);
-  av_frame_free(frame);
-}
-int ret=blend_ass_image(ass, frame, image);
-
-convert_rgba_to_yuva420p(frame);
-   // return ret;
-    }
-*if_empty_subtitle=false;
- printf("*************889 %d %d \n",frame,*frame);
-return 0;
-
-    
-       }else{
-//frame->width=100;
- //  frame->height=100;
-                //tmp_frame->format=logo_frame->format;
-  //              frame->format=AV_PIX_FMT_YUVA420P;
-
- //int ret= gen_empty_layout_frame(frame,100,100);
- //
-   *if_empty_subtitle=true;
-return 0;
-   }
-
-
-   }else{
- //int ret= gen_empty_layout_frame(frame,100,100);
-return 0;
-   }
-    return -1;
-
-//}else{
-//printf("gen empty layout fail frame is empty \n");  
-//}
-}
 
 /*  all_subtitle_logo_native_video_codec_func
  * 支持ass,srt和位图字幕 
@@ -821,7 +850,7 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                    return -1;
                }
 
-               filter_graph_point->nb_threads=12;
+               filter_graph_point->nb_threads=8;
                filter_graph_point->thread_type=FF_THREAD_FRAME;
 
                     // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
@@ -840,15 +869,15 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
 
                                "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d,hwupload_cuda[subtitle];"
 
-                               "[main][logo]overlay_cuda=x=W-w:y=H-h[main_logo];"
-                               "[main_logo][subtitle]overlay_cuda=x=(W-w)/2:y=H-h[result];"
+                               "[main][logo]overlay_cuda=x=W-w:y=H-h-%d[main_logo];"
+                               "[main_logo][subtitle]overlay_cuda=x=(W-w)/2:y=H-h-%d[result];"
 
                                //"[result]format=yuv420p[result_2];" 
                                "[result]scale_cuda=format=p010[result_2];"
                                "[result_2]buffersink",
                                frame->width, frame->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  frame->width,frame->height
                                ,logo_frame->width,logo_frame->height,AV_PIX_FMT_RGBA,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den,
-1600, 96,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den
+frame->width, frame->height,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,ENCODE_ALIGN_BITS,ENCODE_ALIGN_BITS
                                //frame->width-logo_frame->width,frame->height-logo_frame->height
                                                           //,1920,808
                  );
@@ -928,19 +957,27 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
                    filter_graph_des->ass->alpha=0;
                    filter_graph_des->ass->renderer=NULL;
 
+
+    int ret = init(filter_graph_des->ass);
+
+    if (ret < 0)
+        return ret;
+
+   config_input(filter_graph_des->ass, AV_PIX_FMT_RGBA,  (*enc_ctx)->width,(*enc_ctx)->height);
+
                    if(endWith(filter_graph_des->ass->filename,LAOFMC_SUB_FILE_ASS_SUFFIX)){
+//printf("@@@@@@@@@@@@@@@@@@@@@@@234 %d %d \n",12,23);
                        init_ass(filter_graph_des->ass);
 
-                       sleep(2);
-
+                    
                    }else{
                        init_subtitles(filter_graph_des->ass);
 
                    }
-printf("@@@@@@@@@@@@@@@@@@@@@@@234 %d %d \n",12,23);
 
-                   config_input(filter_graph_des->ass, AV_PIX_FMT_RGBA,  (*enc_ctx)->width,(*enc_ctx)->height);
-sleep(5);
+
+                
+
                }
        
 
@@ -969,14 +1006,14 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
   
                av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
                           }  
-printf("@@@@@@@@@@@@@@@@@@@@@@@234 %d %d \n",(*enc_ctx)->width,(*enc_ctx)->height);
+//printf("@@@@@@@@@@@@@@@@@@@@@@@234 %d %d \n",(*enc_ctx)->width,(*enc_ctx)->height);
 
             //从编码Context拷贝参数给输出流,必须在avcodec_open2之后再设置输出流参数;
             ret = avcodec_parameters_from_context(ofmt_ctx->streams[0]->codecpar,*enc_ctx );
             if(ret < 0){
                 av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
                           }
-printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->width,ofmt_ctx->streams[0]->codecpar->height);
+//printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->width,ofmt_ctx->streams[0]->codecpar->height);
 /*AVOutputFormat *ofmt=ofmt_ctx->oformat;
  if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, "rtsp://127.0.0.1:5544/live/test", AVIO_FLAG_WRITE);
@@ -1032,12 +1069,12 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->wid
 
                 }
                 new_logo_frame->pts=s_frame_pts;//frame的pts为0,需要设置为frame的pts
-                //if (filter_graph_des->if_fade ){
+                if (filter_graph_des->if_fade ){
 
-                 //    handle_logo_fade(new_logo_frame,filter_graph_des->duration_frames,filter_graph_des->interval_frames,filter_graph_des->present_frames);
+                     handle_logo_fade(new_logo_frame,filter_graph_des->duration_frames,filter_graph_des->interval_frames,filter_graph_des->present_frames);
 
 
-                 //}
+                 }
 
 
 //处理text字幕
@@ -1075,7 +1112,7 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->wid
 */
                          *(filter_graph_des->subtitle_frame)=*(filter_graph_des->subtitle_empty_frame);
                         // if_empty_subtitle=true;
-  printf("set2 empty %d %d %d %d \n",*(filter_graph_des->subtitle_frame),filter_graph_des->subtitle_frame,*(filter_graph_des->subtitle_empty_frame),filter_graph_des->subtitle_empty_frame) ;
+  //printf("set2 empty %d %d %d %d \n",*(filter_graph_des->subtitle_frame),filter_graph_des->subtitle_frame,*(filter_graph_des->subtitle_empty_frame),filter_graph_des->subtitle_empty_frame) ;
 
                        }else{
 
@@ -1100,7 +1137,7 @@ printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",ofmt_ctx->streams[0]->codecpar->wid
    //             subtitle_buffersrc_par->width=50;
     //            subtitle_buffersrc_par->height=50;
  //              }else{
-printf("subtitle2 x:%d y:%d\n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
+//printf("subtitle2 x:%d y:%d\n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
  subtitle_buffersrc_par=av_buffersrc_parameters_alloc();
     //memset(subtitle_buffersrc_par,0,sizeof(*subtitle_buffersrc_par));
                 subtitle_buffersrc_par->width=(*(filter_graph_des->subtitle_frame))->width;
@@ -1681,7 +1718,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     filter_graph_des->subtitle_frame=(AVFrame **)av_malloc(sizeof(AVFrame **));
 //memset(filter_graph_des->subtitle_frame,0,sizeof(AVFrame **));
     *(filter_graph_des->subtitle_frame)=NULL;
-gen_empty_layout_frame(filter_graph_des->subtitle_empty_frame,10,10);
+gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     filter_graph_des->logo_frame=&new_logo_frame;
     //filter_graph_des->subtitle_frame=&subtitle_empty_frame;
   
@@ -1955,7 +1992,7 @@ gen_empty_layout_frame(filter_graph_des->subtitle_empty_frame,10,10);
               av_log(NULL,AV_LOG_DEBUG,"video stream time base:{%d %d} bitrate :%d \n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->bit_rate);
               //设置编码Context的尺寸 
 
-             /* if(task_handle_process_info->width>0&&task_handle_process_info->height>0){
+              if(task_handle_process_info->width>0&&task_handle_process_info->height>0){
                   enc_ctx->width=task_handle_process_info->width;
                   enc_ctx->height=task_handle_process_info->height; 
 
@@ -1964,10 +2001,12 @@ gen_empty_layout_frame(filter_graph_des->subtitle_empty_frame,10,10);
                   enc_ctx->width = input_streams[nb_input_streams-1]->dec_ctx->width;
                   enc_ctx->height = input_streams[nb_input_streams-1]->dec_ctx->height;
 
-              }*/
+              }
 
-              enc_ctx->width=3840;
-              enc_ctx->height=1616;
+              enc_ctx->height=aligned_frame_height(enc_ctx->height);
+
+              //enc_ctx->width=3840;
+              //enc_ctx->height=1616;
                         
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
 
@@ -2523,6 +2562,11 @@ int hw_device_setup_for_filter(FilterGraph *fg,AVBufferRef *hw_device_ctx)
   
     return 0;
 }
+int aligned_frame_height(int h){
+
+  return ENCODE_ALIGN_BITS*(h / ENCODE_ALIGN_BITS);
+
+};
 
 int set_hwframe_ctx_cuda(AVCodecContext *ctx, AVFilterContext *filter)
 {
@@ -2626,7 +2670,7 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     info->audio_channels=6;
     //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
     //info->control->subtitle_time_offset=2000;
-    //info->control->subtitle_charenc="GBK";
+    info->control->subtitle_charenc="GBK";
 //printf("##################1\n");
     //info->control->seek_time=300;
 
