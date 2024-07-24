@@ -571,7 +571,7 @@ image_t * gen_image(int width, int height)
     img->buffer = calloc(1,img->height*img->stride);
 
     printf("memset buffer \n");
-    memset(img->buffer, 0x00, img->stride * img->height);
+    //memset(img->buffer, 0x00, img->stride * img->height);
 
     //for(int i=0;i<img->height*img->stride;i++){
 
@@ -610,7 +610,7 @@ int gen_empty_layout_frame(AVFrame **frame,int width, int height)
 
                 //av_frame_free(&tmp_frame);
                 //
-  printf("memset buffer2 %d \n",tmp_frame);
+  //printf("memset buffer2 %d \n",tmp_frame);
 
                 return 0;
 

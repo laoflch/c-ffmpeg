@@ -659,7 +659,7 @@ tmp_frame=av_frame_alloc();
 blend(img_empty, img);
                 int ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img_empty->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
  //printf("stride size:%d %d \n",tmp_frame->linesize[0],img->stride);
-         free(img_empty->buffer);
+         //free(img_empty->buffer);
          free(img_empty);
                  //free(img);
 
@@ -761,14 +761,14 @@ int convert_rgba_to_yuva420p(AVFrame **frame){
 
 int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **subtitle_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
     if(pkt!=NULL){
-        AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
+  //      AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
         int ret,s_pts,frame_key,frame_pict_type;
         int64_t s_frame_pts;
         //uint8_t *sd=av_packet_get_side_data(pkt, AV_PKT_DATA_QUALITY_STATS,NULL);
- sw_frame=av_frame_alloc();
+ //sw_frame=av_frame_alloc();
 
- sw_frame->height=frame->height/2;
- sw_frame->width=frame->width/2;
+ //sw_frame->height=frame->height/2;
+ //sw_frame->width=frame->width/2;
 
         ret = avcodec_send_packet(dec_ctx, pkt);
   //av_packet_unref(pkt);
@@ -1164,7 +1164,7 @@ printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->
                      av_packet_unref(pkt);
                      av_packet_unref(out_pkt);
        
-                     av_frame_unref(sw_frame);
+                     //av_frame_unref(sw_frame);
                      return ret;
                  }
 //if(if_empty_subtitle){
@@ -1188,7 +1188,7 @@ printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->
                      av_packet_unref(pkt);
                      av_packet_unref(out_pkt);
        
-                     av_frame_unref(sw_frame);
+                     //av_frame_unref(sw_frame);
                      return ret;
                  }
                  av_frame_unref(new_logo_frame);
@@ -1202,7 +1202,7 @@ printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->
 
                  if(ret < 0){
                      av_frame_unref(frame);
-                     av_frame_unref(sw_frame);
+                     //av_frame_unref(sw_frame);
                      av_packet_unref(pkt);
                      av_packet_unref(out_pkt);
                      av_log(NULL,"Error: av_buffersrc_add_frame failed\n",NULL);
@@ -1282,14 +1282,14 @@ av_frame_unref(frame);
              //   } 
                 if (ret_enc < 0) {
                     av_frame_unref(frame);
-                    av_frame_unref(sw_frame);
-                    av_frame_free(&sw_frame);
+                    //av_frame_unref(sw_frame);
+                    //av_frame_free(&sw_frame);
                     av_log(NULL,AV_LOG_ERROR, "Error sending a frame for encoding %d \n",ret_enc);
                     continue;
                 }
-                if (filter_graph_des->if_hw){
-                    av_frame_unref(hw_frame);
-                }
+                //if (filter_graph_des->if_hw){
+                 //   av_frame_unref(hw_frame);
+                //}
 
 
 
@@ -1297,20 +1297,20 @@ av_frame_unref(frame);
                      ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
 
                      if (ret_enc == AVERROR(EAGAIN)) {
-printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
+//printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
                          av_frame_unref(frame);
                          if (filter_graph_des->if_hw){
-                             av_frame_free(&sw_frame);
+                 //            av_frame_free(&sw_frame);
                          } 
                          break;
 
                      } else if( ret_enc == AVERROR_EOF){
-                         av_frame_unref(sw_frame);
-                         av_frame_free(&sw_frame);
+                  //       av_frame_unref(sw_frame);
+                   //      av_frame_free(&sw_frame);
                          break;
                      } else if (ret_enc < 0) {
                          av_frame_unref(frame);
-                         av_frame_free(&sw_frame);
+                    //     av_frame_free(&sw_frame);
                          av_log(NULL,AV_LOG_ERROR, "Error during encoding\n",NULL);
                          break; 
                      }
@@ -1335,9 +1335,9 @@ exit;
                      break;
 
                 }
-                if (filter_graph_des->if_hw){
-                    av_frame_free(&hw_frame);
-                }
+                //if (filter_graph_des->if_hw){
+                 //   av_frame_free(&hw_frame);
+                //}
 
 
     
