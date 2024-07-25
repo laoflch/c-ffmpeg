@@ -15,7 +15,7 @@ make
 
 ## 函数说明
 
-### push2trtsp_sub_logo
+### push2rtsp_sub_logo
 
  * 拉取视频流（流媒体或者视频文件）通过rtsp协议推送到直播服务器。
  * 支持多种类型的字幕解析，并硬编字幕到输出流。
@@ -47,7 +47,7 @@ make
 
 
 
-### push2trtsp_sub_logo_cuda
+### push2rtsp_sub_logo_cuda
 
 - 拉取视频流（流媒体或者视频文件）通过rtsp协议推送到直播服务器。
 - 支持多种类型的字幕解析，并硬编字幕到输出流。
