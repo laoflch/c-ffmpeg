@@ -516,7 +516,32 @@ for(int i=0;i<filter_graph_point->nb_filters;i++){
 
 
 }
-int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base,bool *if_empty_subtitle){
+
+int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRational time_base,bool *if_empty_subtitle){
+
+  if(sub_frame->pts>0){
+ int64_t time_ns=av_rescale_q((*frame)->pts, time_base, AV_TIME_BASE_Q);
+
+
+ //   return 0;
+
+   //double time_ms = frame->pts * av_q2d(time_base) * 1000;
+//printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
+
+//if (frame->pts >= sub_frame->pts && frame->pts <= (sub_frame->pts + sub_frame->duration)) {
+if(sub_frame->is_display&&time_ns>=sub_frame->pts){ 
+    printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
+  (*frame)=sub_frame->sub_frame;
+
+  *if_empty_subtitle=false;
+  return 0;
+
+}}
+   *if_empty_subtitle=true;
+   return 0;
+}
+
+int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base,bool *if_empty_subtitle){
 //AVFilterContext *ctx = inlink->dst;
  //   AVFilterLink *outlink = ctx->outputs[0];
     //AssContext *ass = ctx->priv;
@@ -769,9 +794,9 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
 
  //sw_frame->height=frame->height/2;
  //sw_frame->width=frame->width/2;
-
+        
         ret = avcodec_send_packet(dec_ctx, pkt);
-  //av_packet_unref(pkt);
+  //av_packet_unref(pkt);/
         int64_t count=0;
         if (ret < 0) {
             fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
@@ -941,7 +966,7 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
                avfilter_inout_free(&outputs);
 
 
-/*处理ass,srt 字幕
+/*处理外挂ass,srt 字幕
  *
  * 初始化AssContext*/
    
@@ -979,7 +1004,34 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
                 
 
                }
-       
+       /*
+ *文件内部字幕流处理
+ */
+                    if(filter_graph_des->sub_frame&&filter_graph_des->subtitle_stream_index>=0){
+                   /*处理pgs 字幕
+                    *
+                    * 初始化OverlayContext*/
+                        //filter_graph_des->overlay_ctx=init_overlay_context(AV_PIX_FMT_YUV420P);
+                        //filter_graph_des->sub_frame=*(filter_graph_des->subtitle_empty_frame);
+                    }else if(filter_graph_des->subtitle_stream_index>=0){
+
+/*处理ass,srt 字幕
+ *
+ * 初始化AssContext*/
+                        filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
+                        filter_graph_des->ass->stream_index=filter_graph_des->subtitle_stream_index;
+                        filter_graph_des->ass->charenc=NULL;
+                        filter_graph_des->ass->force_style=NULL;
+                        filter_graph_des->ass->fontsdir=NULL;
+                        filter_graph_des->ass->original_w=0;
+                        filter_graph_des->ass->alpha=0;
+
+                       //动态加载字幕文件
+                        init_subtitles_dynamic(filter_graph_des->ass,filter_graph_des->subtitle_dec_ctx);
+                        //init_subtitles(filter_graph_des->ass);
+                        //初始化配置ASS
+                        config_ass(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
+                    }
 
 
            
@@ -1078,7 +1130,7 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
 
 
 //处理text字幕
-                   // if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
+                    if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
                         //frame->pts=s_frame_pts;//+av_rescale_q(fmt_ctx->start_time,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base);
                        // printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
                        //
@@ -1087,7 +1139,7 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
 //memset(subtitle_frame,0,sizeof(**subtitle_frame));
                        bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
                       //subtitle_frame->pts=s_frame_pts; 
-                       handle_subtitle2(filter_graph_des->subtitle_frame,s_frame_pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
+                       handle_subtitle2image(filter_graph_des->subtitle_frame,s_frame_pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
   printf("set empty %d \n",*(filter_graph_des->subtitle_frame)) ;
                        if(if_empty_subtitle){
 
@@ -1117,7 +1169,21 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
                        }else{
 
                        }
-   
+                    }else if(filter_graph_des->sub_frame){
+
+ bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
+                      printf("ttttttttttttt %d \n",if_empty_subtitle);
+                 handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
+
+                 if(if_empty_subtitle){
+
+                 *(filter_graph_des->subtitle_frame)=*(filter_graph_des->subtitle_empty_frame);
+                      }else{
+
+                       }
+
+
+                    } 
 (*(filter_graph_des->subtitle_frame))->pts=s_frame_pts;
 //int64_t subtitle_empty_frame_pts=0;
                        /* if(filter_graph_des->subtitle_time_offset>0){ 
@@ -1210,12 +1276,12 @@ printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->
                  }
 //printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&3 \n");
 av_frame_unref(frame);
-printf("a add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->subtitle_frame);
+//printf("a add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->subtitle_frame);
 //free(subtitle_buffersrc_par);
 
                 while(1){
                     ret = av_buffersink_get_frame(*resultsink_ctx, frame);
-printf("a2 add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->subtitle_frame);
+//printf("a2 add %d %d \n",(*(filter_graph_des->subtitle_frame)),filter_graph_des->subtitle_frame);
                     if( ret == AVERROR_EOF ){
                     //没有更多的 AVFrame
                         av_log(NULL,"no more avframe output \n",NULL);
@@ -1877,8 +1943,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
         stream_mapping[i] = -1;
 
         //选择视频流,音频流和字幕流
-        if (i!=video_index&&i!=audio_index){
-            //&&i!=subtitle_index){
+        if (i!=video_index&&i!=audio_index
+            &&i!=subtitle_index){
         //if(i!=video_index){
             continue;
         }
@@ -1896,7 +1962,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
         //输入流解码参数
         AVCodecParameters *in_codecpar = in_stream->codecpar;
         stream_mapping[i]=nb_input_streams-1;
-
+        //初始化字幕帧
         if(i==subtitle_index&&in_codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE){
             filter_graph_des->subtitle_dec_ctx=input_streams[nb_input_streams-1]->dec_ctx;
             AVCodecDescriptor *dec_desc = avcodec_descriptor_get(in_stream->codecpar->codec_id);

@@ -629,9 +629,9 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
     if (ret >= 0&&got_frame>0) {
  printf("subtitle fromat:%d\n",subtitle.format);
       if(subtitle.format==0){
-//printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
- //printf("num_rects:%d\n",subtitle.num_rects);
+ printf("num_rects:%d\n",subtitle.num_rects);
         if(subtitle.num_rects>0){
         for(size_t i=0;i<subtitle.num_rects;i++){
           AVSubtitleRect *sub_rect=subtitle.rects[i];
