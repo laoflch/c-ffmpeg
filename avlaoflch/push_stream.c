@@ -68,10 +68,10 @@ av_cold int init_subtitles_dynamic( AssContext *ass, AVCodecContext *dec_ctx)
     AVStream *st;
     
     /* Init libass */
-    ret = init(ass);
+    //ret = init(ass);
 
-    if (ret < 0)
-        return ret;
+    //if (ret < 0)
+     //   return ret;
     ass->track = ass_new_track(ass->library);
     if (!ass->track) {
         av_log(NULL, AV_LOG_ERROR, "Could not create a libass track\n");
@@ -689,6 +689,8 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
         } 
       }else if(subtitle.format==1){
         //ass
+        //
+
   const int64_t start_time = av_rescale_q(subtitle.pts, AV_TIME_BASE_Q, av_make_q(1, 1000));
                 const int64_t duration   = subtitle.end_display_time;
                 for (size_t i = 0; i < subtitle.num_rects; i++) {

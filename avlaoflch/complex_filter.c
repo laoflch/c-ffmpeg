@@ -3900,10 +3900,10 @@ av_cold int init_subtitles( AssContext *ass )
     //AssContext *ass = (AssContext *)av_malloc(sizeof(AssContext));
 
     /* Init libass */
-    ret = init(ass);
+    //ret = init(ass);
 
-    if (ret < 0)
-        return ret;
+    //if (ret < 0)
+     //   return ret;
     ass->track = ass_new_track(ass->library);
     if (!ass->track) {
         av_log(NULL, AV_LOG_ERROR, "Could not create a libass track\n");

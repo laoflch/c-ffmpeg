@@ -310,7 +310,7 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
             case AV_CODEC_ID_HEVC:
 
 
-//printf("##############3")
+
                ost->enc = avcodec_find_encoder_by_name("hevc_nvenc");
                break;
             case AV_CODEC_ID_H264:
@@ -548,13 +548,15 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
     int detect_change = 0;
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
-    //double time_ms=55220;
-  //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
+    //double time_ms=37225;
+  printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
- //printf("*************889 %d \n",ass->renderer);
+ printf("*************889 %d \n",ass->renderer);
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
 
        if(image){
+
+         printf("$$$$$$$$$$$$$$$$$$$$$image \n");
 
     if (detect_change){
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
@@ -568,7 +570,7 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
    //int ret= gen_empty_layout_frame(frame,image->w,image->h);
    //
        
-  //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
+  printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
     //overlay_ass_image_cuda(ass, *frame, image);
   //                  printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
 if(!(*if_empty_subtitle) && *frame){
@@ -672,7 +674,7 @@ image_t *img_empty=gen_image(img->stride,img->h);
     img_tmp=img_tmp->next; 
 
    }
- //printf("max stride size:%d %d \n",max_stride,max_height);
+ printf("max stride size:%d %d \n",max_stride,max_height);
 
 image_t *img_empty=gen_image(max_stride,max_height);
 
@@ -906,7 +908,7 @@ frame->width, frame->height,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,
                                //frame->width-logo_frame->width,frame->height-logo_frame->height
                                                           //,1920,808
                  );
-
+ printf("@@@@@@@@@@@@@@@@@@@@@@@234\n" );
                ret = avfilter_graph_parse2(filter_graph_point, args.str, &inputs, &outputs);
                if (ret < 0) {
                    printf("Cannot parse2 graph\n");
@@ -921,7 +923,7 @@ for(int i=0;i<filter_graph_point->nb_filters;i++){
 
 
 }
-            
+           
   main_buffersrc_par=av_buffersrc_parameters_alloc();
   memset(main_buffersrc_par,0,sizeof(*main_buffersrc_par));
 
@@ -970,12 +972,14 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
  *
  * 初始化AssContext*/
    
-               if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass==NULL){
+               if ((filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass==NULL)||(filter_graph_des->subtitle_stream_index>=0&&!(filter_graph_des->sub_frame)&&strcmp(filter_graph_des->subtitle_path,"")==0)){
 
                 filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
                    filter_graph_des->ass->filename=filter_graph_des->subtitle_path;
                    filter_graph_des->ass->stream_index=-1;
                    filter_graph_des->ass->charenc=filter_graph_des->subtitle_charenc;
+
+                  // printf("###################charenc %s \n",filter_graph_des->ass->charenc);
                    filter_graph_des->ass->force_style=NULL;
                    filter_graph_des->ass->fontsdir=NULL;
                    filter_graph_des->ass->original_w=0;
@@ -990,7 +994,12 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
 
    config_input(filter_graph_des->ass, AV_PIX_FMT_RGBA,  (*enc_ctx)->width,(*enc_ctx)->height);
 
-                   if(endWith(filter_graph_des->ass->filename,LAOFMC_SUB_FILE_ASS_SUFFIX)){
+
+   if(filter_graph_des->subtitle_stream_index>=0&&!(filter_graph_des->sub_frame)){
+ //动态加载字幕文件
+                        init_subtitles_dynamic(filter_graph_des->ass,filter_graph_des->subtitle_dec_ctx);
+
+   }else if(endWith(filter_graph_des->ass->filename,LAOFMC_SUB_FILE_ASS_SUFFIX)){
 //printf("@@@@@@@@@@@@@@@@@@@@@@@234 %d %d \n",12,23);
                        init_ass(filter_graph_des->ass);
 
@@ -1007,18 +1016,18 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
        /*
  *文件内部字幕流处理
  */
-                    if(filter_graph_des->sub_frame&&filter_graph_des->subtitle_stream_index>=0){
+                //    if(filter_graph_des->sub_frame&&filter_graph_des->subtitle_stream_index>=0){
                    /*处理pgs 字幕
                     *
                     * 初始化OverlayContext*/
                         //filter_graph_des->overlay_ctx=init_overlay_context(AV_PIX_FMT_YUV420P);
                         //filter_graph_des->sub_frame=*(filter_graph_des->subtitle_empty_frame);
-                    }else if(filter_graph_des->subtitle_stream_index>=0){
+//                    }//else if(filter_graph_des->subtitle_stream_index>=0){
 
 /*处理ass,srt 字幕
  *
  * 初始化AssContext*/
-                        filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
+                      /*  filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
                         filter_graph_des->ass->stream_index=filter_graph_des->subtitle_stream_index;
                         filter_graph_des->ass->charenc=NULL;
                         filter_graph_des->ass->force_style=NULL;
@@ -1032,7 +1041,7 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
                         //初始化配置ASS
                         config_ass(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
                     }
-
+*/
 
            
                 }
@@ -1130,9 +1139,10 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
 
 
 //处理text字幕
-                    if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
+                    //if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
+                    if (filter_graph_des->ass!=NULL){
                         //frame->pts=s_frame_pts;//+av_rescale_q(fmt_ctx->start_time,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base);
-                       // printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
+                        printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
                        //
              
                        //AVFrame **subtitle_frame=(AVFrame **)av_malloc(sizeof(AVFrame **));
@@ -1446,6 +1456,7 @@ uint64_t auto_audio_cuda_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *fra
 
 
         ret = avcodec_receive_frame(dec_ctx, frame);
+
  //printf("in sample fmt:%d\n",frame->format);
       if (ret == AVERROR(EAGAIN)) {
  av_packet_unref(pkt);
@@ -1467,6 +1478,7 @@ uint64_t auto_audio_cuda_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *fra
 
             return 1 ;
         }
+
     int enc_frame_size=(*enc_ctx)->frame_size;
            float factor=(float)enc_frame_size/(float)frame->nb_samples;
            int frame_size=frame->nb_samples;
@@ -1509,12 +1521,15 @@ s_pts+=frame->nb_samples;
                     /* pull filtered audio from the filtergraph */
                     while (ret >=0) {
                         ret = av_buffersink_get_frame(*buffersink_ctx, frame);
+
                         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
+ printf("####################32\n");
  av_packet_unref(pkt);
  //
         av_packet_unref(out_pkt);
                           //s_pts=s_pts+pkt->duration;
                            //return s_pts; 
+                            //printf("####################3\n");
                            break;
                         }
                         if (ret < 0){
@@ -1529,6 +1544,7 @@ s_pts+=frame->nb_samples;
         fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
        return 1; 
     } 
+
       //接收编码完成的packet
     while (ret_enc >= 0) {
         ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
@@ -1570,7 +1586,7 @@ pkt->stream_index=s_stream_index;
 
 //out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time+AV_TIME_BASE*0.08;
 out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
- //printf("####################3\n");
+
       out_pkt->duration=pkt->duration;
     
  //   } else if(if_recreate_pts){
@@ -1653,11 +1669,12 @@ return s_pts;
     av_packet_unref(out_pkt);
    
     }
+printf("####################33\n");
 
 
       }
     //return s_pts;  
-
+printf("####################34\n");
     }
   
  
@@ -1733,6 +1750,9 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     filter_graph_des->current_frame_pts=0;
     filter_graph_des->ass=NULL;
     filter_graph_des->overlay_ctx=NULL;
+
+
+    printf("###############f %s \n",filter_graph_des->subtitle_path);
 
     /*复制字幕文件名*/
     strcpy(filter_graph_des->subtitle_path, subtitle_file_path);
@@ -2736,7 +2756,7 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     info->audio_channels=6;
     //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
     //info->control->subtitle_time_offset=2000;
-    info->control->subtitle_charenc="GBK";
+    info->control->subtitle_charenc="UTF-8";
 //printf("##################1\n");
     //info->control->seek_time=300;
 
