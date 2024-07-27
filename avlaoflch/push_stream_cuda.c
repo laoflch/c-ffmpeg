@@ -530,7 +530,7 @@ int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRation
 
 //if (frame->pts >= sub_frame->pts && frame->pts <= (sub_frame->pts + sub_frame->duration)) {
 if(sub_frame->is_display&&time_ns>=sub_frame->pts){ 
-    printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
+    //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
   (*frame)=sub_frame->sub_frame;
 
   *if_empty_subtitle=false;
@@ -549,14 +549,14 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
     //double time_ms=37225;
-  printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
+  //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
- printf("*************889 %d \n",ass->renderer);
+ //printf("*************889 %d \n",ass->renderer);
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
 
        if(image){
 
-         printf("$$$$$$$$$$$$$$$$$$$$$image \n");
+  //       printf("$$$$$$$$$$$$$$$$$$$$$image \n");
 
     if (detect_change){
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
@@ -570,7 +570,7 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
    //int ret= gen_empty_layout_frame(frame,image->w,image->h);
    //
        
-  printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
+  //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
     //overlay_ass_image_cuda(ass, *frame, image);
   //                  printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
 if(!(*if_empty_subtitle) && *frame){
@@ -1149,7 +1149,17 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
 //memset(subtitle_frame,0,sizeof(**subtitle_frame));
                        bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
                       //subtitle_frame->pts=s_frame_pts; 
-                       handle_subtitle2image(filter_graph_des->subtitle_frame,s_frame_pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
+  if(filter_graph_des->subtitle_time_offset>0){ 
+                            frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+                        }else if (filter_graph_des->subtitle_time_offset<0){
+                            frame->pts=s_frame_pts-av_rescale_q(-filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+
+                        }else {
+                            frame->pts=s_frame_pts;
+
+                        }
+
+                       handle_subtitle2image(filter_graph_des->subtitle_frame,frame->pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
   printf("set empty %d \n",*(filter_graph_des->subtitle_frame)) ;
                        if(if_empty_subtitle){
 
@@ -1523,7 +1533,7 @@ s_pts+=frame->nb_samples;
                         ret = av_buffersink_get_frame(*buffersink_ctx, frame);
 
                         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
- printf("####################32\n");
+ //printf("####################32\n");
  av_packet_unref(pkt);
  //
         av_packet_unref(out_pkt);
@@ -1669,12 +1679,12 @@ return s_pts;
     av_packet_unref(out_pkt);
    
     }
-printf("####################33\n");
+//printf("####################33\n");
 
 
       }
     //return s_pts;  
-printf("####################34\n");
+//printf("####################34\n");
     }
   
  
@@ -2758,7 +2768,7 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->control->subtitle_time_offset=2000;
     info->control->subtitle_charenc="UTF-8";
 //printf("##################1\n");
-    //info->control->seek_time=300;
+    info->control->seek_time=300;
 
 
    // info->control->seek_time=1;
