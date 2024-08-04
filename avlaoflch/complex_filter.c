@@ -6476,16 +6476,19 @@ sw_frame->height=frame->height;
 int hw_decoder_init(AVCodecContext *ctx, const enum AVHWDeviceType type,AVBufferRef **hw_device_ctx){
     int err = 0;
  
+AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
 
-    if ((err = av_hwdevice_ctx_create(hw_device_ctx, type,
+    if ((err = av_hwdevice_ctx_create(hwdevice, type,
                                       NULL, NULL, 0)) < 0) {
         fprintf(stderr, "Failed to create specified HW device.\n");
         return err;
     }
 
-    ((AVHWFramesContext *)((*hw_device_ctx)->data))->format=AV_PIX_FMT_CUDA;
+    *hw_device_ctx=*hwdevice;
+
+    ((AVHWFramesContext *)((*hwdevice)->data))->format=AV_PIX_FMT_CUDA;
 //sleep(60);
-    ctx->hw_device_ctx = av_buffer_ref(*hw_device_ctx);
+    ctx->hw_device_ctx = av_buffer_ref(*hwdevice);
 
     //ff_decode_get_hw_frames_ctx(ctx,AV_HWDEVICE_TYPE_CUDA);
 

@@ -3,7 +3,7 @@
 #include <libavutil/timestamp.h>
 #include <libavutil/fifo.h>
 #include <libavutil/opt.h>
-
+#include "imgutils.h"
 #include <libavutil/bprint.h>
 #include <libavutil/time.h>//必须引入，否则返回值int64_t无效，默认返回int,则会出现负值情况
 #include <libavutil/audio_fifo.h>
@@ -31,7 +31,6 @@
 #include "subtitle.h"
 #include "ass/ass.h"
 #include <ass/ass_types.h>
-
 #define ENCODE_ALIGN_BITS 0x40
 #define R 0
 #define G 1
@@ -42,6 +41,90 @@
 #define AB(c)  (((c)>>8) &0xFF)
 #define AA(c)  ((0xFF-(c)) &0xFF)
 
+typedef struct HWContextType {
+    enum AVHWDeviceType type;
+    const char         *name;
+
+    /**
+     * An array of pixel formats supported by the AVHWFramesContext instances
+     * Terminated by AV_PIX_FMT_NONE.
+     */
+    const enum AVPixelFormat *pix_fmts;
+
+    /**
+     * size of the public hardware-specific context,
+     * i.e. AVHWDeviceContext.hwctx
+     */
+    size_t             device_hwctx_size;
+    /**
+     * size of the private data, i.e.
+     * AVHWDeviceInternal.priv
+     */
+    size_t             device_priv_size;
+
+    /**
+     * Size of the hardware-specific device configuration.
+     * (Used to query hwframe constraints.)
+     */
+    size_t             device_hwconfig_size;
+
+    /**
+     * size of the public frame pool hardware-specific context,
+     * i.e. AVHWFramesContext.hwctx
+     */
+    size_t             frames_hwctx_size;
+    /**
+     * size of the private data, i.e.
+     * AVHWFramesInternal.priv
+     */
+    size_t             frames_priv_size;
+
+    int              (*device_create)(AVHWDeviceContext *ctx, const char *device,
+                                      AVDictionary *opts, int flags);
+    int              (*device_derive)(AVHWDeviceContext *dst_ctx,
+                                      AVHWDeviceContext *src_ctx,
+                                      AVDictionary *opts, int flags);
+
+    int              (*device_init)(AVHWDeviceContext *ctx);
+    void             (*device_uninit)(AVHWDeviceContext *ctx);
+
+    int              (*frames_get_constraints)(AVHWDeviceContext *ctx,
+                                               const void *hwconfig,
+                                               AVHWFramesConstraints *constraints);
+
+    int              (*frames_init)(AVHWFramesContext *ctx);
+    void             (*frames_uninit)(AVHWFramesContext *ctx);
+
+    int              (*frames_get_buffer)(AVHWFramesContext *ctx, AVFrame *frame);
+    int              (*transfer_get_formats)(AVHWFramesContext *ctx,
+                                             enum AVHWFrameTransferDirection dir,
+                                             enum AVPixelFormat **formats);
+    int              (*transfer_data_to)(AVHWFramesContext *ctx, AVFrame *dst,
+                                         const AVFrame *src);
+    int              (*transfer_data_from)(AVHWFramesContext *ctx, AVFrame *dst,
+                                           const AVFrame *src);
+
+    int              (*map_to)(AVHWFramesContext *ctx, AVFrame *dst,
+                               const AVFrame *src, int flags);
+    int              (*map_from)(AVHWFramesContext *ctx, AVFrame *dst,
+                                 const AVFrame *src, int flags);
+
+    int              (*frames_derive_to)(AVHWFramesContext *dst_ctx,
+                                         AVHWFramesContext *src_ctx, int flags);
+    int              (*frames_derive_from)(AVHWFramesContext *dst_ctx,
+                                           AVHWFramesContext *src_ctx, int flags);
+} HWContextType;
+
+struct AVHWDeviceInternal {
+    const HWContextType *hw_type;
+    void                *priv;
+
+    /**
+     * For a derived device, a reference to the original device
+     * context it was derived from.
+     */
+    AVBufferRef *source_device;
+};
 static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
                                         const enum AVPixelFormat *pix_fmts){
     /*const enum AVPixelFormat *p;
@@ -55,14 +138,14 @@ static enum AVPixelFormat get_hw_format(AVCodecContext *ctx,
     return AV_PIX_FMT_NONE;*/
 const enum AVPixelFormat *p;
 
- for (p = pix_fmts; *p != -1; p++) {
-  printf("##################  %d %s \n",*p,av_get_pix_fmt_name(*p));
- }
+ //for (p = pix_fmts; *p != -1; p++) {
+  //printf("##################  %d %s \n",*p,av_get_pix_fmt_name(*p));
+ //}
 
 
   if(ctx!=NULL){
 
- printf("##################  %d %s \n",AV_PIX_FMT_CUDA,av_get_pix_fmt_name(AV_PIX_FMT_CUDA));
+ //printf("##################  %d %s \n",AV_PIX_FMT_CUDA,av_get_pix_fmt_name(AV_PIX_FMT_CUDA));
     return AV_PIX_FMT_CUDA;
 
   }
@@ -187,14 +270,33 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         ist->dec_ctx->time_base=st->time_base;
         ist->dec_ctx->framerate=av_guess_frame_rate(ic,st,NULL);
 
+
+
         if(hw&&par->codec_type==AVMEDIA_TYPE_VIDEO){ 
             ist->dec_ctx->get_format  = get_hw_format;
 
+AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
+
+//              AVBufferRef *hwdevice;
+
+//               char buf[64]={0};
+
+ //              snprintf(buf,sizeof(buf),"%d",0);
+
+               av_hwdevice_ctx_create(hwdevice, type, NULL, NULL, 0);
+
+             
+ printf("hwframe_ctx_init %d\n ",2);
             if (hw_decoder_init(ist->dec_ctx, type,hw_device_ctx) < 0)
             return ;
+            av_buffer_unref(hwdevice);
+
+            
         }
 
 
+
+             
 
   //      printf("decodec_id:%d sample_fmt%d\n",ist->dec_ctx->codec_id,ist->dec_ctx->sample_fmt);
  //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
@@ -246,7 +348,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
            return ;
         }
 
-        printf("@@@@@@@@@@@@@@@@@@@@@@@@@@2 %d \n",(*hw_device_ctx)->buffer);
+        //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@2 %d \n",(*hw_device_ctx)->buffer);
   
    //printf("2 is vs dec_ctx time_base:{%d %d} {%d %d} %d %d %d \n",ic->streams[input_stream_index]->time_base.den,ic->streams[input_stream_index]->time_base.num,input_streams[input_stream_index]->dec_ctx->time_base.den,input_streams[input_stream_index]->dec_ctx->time_base.num,input_streams[input_stream_index],ist,input_stream_index);
     //    printf("dec_ctx:%d sample_fmt:%d \n",ist->dec_ctx->frame_size,ist->dec_ctx->sample_fmt);
@@ -851,11 +953,16 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
    //处理视频滤镜 
     //这两个变量在本文里没有用的，只是要传进去。
            AVFilterInOut *inputs, *cur, *outputs;
+
+           inputs=av_mallocz(sizeof(*inputs));
+           outputs=av_mallocz(sizeof(*outputs));
+
            AVRational logo_tb = {0};
            AVRational logo_fr = {0};
 
            AVFrame *logo_frame;//,*subtitle_empty_frame; 
 AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
+           //const AVFilter *abuffersrc  = avfilter_get_by_name("hwupload_cuda");
 
            logo_frame=*(filter_graph_des->logo_frame);
 
@@ -879,7 +986,28 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
 
                filter_graph_point->nb_threads=8;
                filter_graph_point->thread_type=FF_THREAD_FRAME;
+              /* 
+               AVBufferRef *hwdevice;
 
+               char buf[64]={0};
+
+               snprintf(buf,sizeof(buf),"%d",0);
+
+               av_hwdevice_ctx_create2(&hwdevice, AV_HWDEVICE_TYPE_CUDA, NULL, NULL, 0);
+
+               AVBufferRef *hwframe=av_hwframe_ctx_alloc(hwdevice);
+
+               AVHWFramesContext *hwframe_ctx=(AVHWFramesContext*) hwframe->data;
+               hwframe_ctx->format=AV_PIX_FMT_CUDA;
+               hwframe_ctx->sw_format=AV_PIX_FMT_YUV420P;
+
+
+               av_hwframe_ctx_init(hwframe_ctx);
+
+
+
+               printf("hwframe_ctx_init %d\n ",av_buffer_ref(hwframe));
+*/
                     // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
                                   //time_base 必须与输入的dec_ctx的time一致，字幕才能正常显示
                AVRational tb = dec_ctx->time_base;
@@ -891,10 +1019,10 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                av_bprint_init(&args, 0, AV_BPRINT_SIZE_AUTOMATIC);
 
                av_bprintf(&args,
-                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d,scale_cuda=%d:%d:format=yuv420p[main];"
-                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d,hwupload_cuda[logo];"
+                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[main_buffer];[main_buffer]scale_cuda=format=yuv420p[main];"
+                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[logo_buffer];[logo_buffer]hwupload_cuda[logo];"
 
-                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d,hwupload_cuda[subtitle];"
+                               "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[subtitle_buffer];[subtitle_buffer]hwupload_cuda[subtitle];"
 
                                "[main][logo]overlay_cuda=x=W-w:y=H-h-%d[main_logo];"
                                "[main_logo][subtitle]overlay_cuda=x=(W-w)/2:y=H-h-%d[result];"
@@ -902,14 +1030,17 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                                //"[result]format=yuv420p[result_2];" 
                                "[result]scale_cuda=format=p010[result_2];"
                                "[result_2]buffersink",
-                               frame->width, frame->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  frame->width,frame->height
-                               ,logo_frame->width,logo_frame->height,AV_PIX_FMT_RGBA,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den,
-frame->width, frame->height,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,ENCODE_ALIGN_BITS,ENCODE_ALIGN_BITS
+                               dec_ctx->width, dec_ctx->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,//  (*enc_ctx)->width,(*enc_ctx)->height,
+                               logo_frame->width,logo_frame->height,AV_PIX_FMT_RGBA,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den,
+(*enc_ctx)->width, (*enc_ctx)->height,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,ENCODE_ALIGN_BITS,ENCODE_ALIGN_BITS
                                //frame->width-logo_frame->width,frame->height-logo_frame->height
                                                           //,1920,808
                  );
- printf("@@@@@@@@@@@@@@@@@@@@@@@234\n" );
+
+               //sleep(5);
+ printf("@@@@@@@@@@@@@@@@@@@@@@@234 %s \n",args.str );
                ret = avfilter_graph_parse2(filter_graph_point, args.str, &inputs, &outputs);
+ printf("@@@@@@@@@@@@@@@@@@@@@@@235\n" );
                if (ret < 0) {
                    printf("Cannot parse2 graph\n");
                    return ret;
@@ -917,13 +1048,13 @@ frame->width, frame->height,AV_PIX_FMT_YUVA420P, tb.num,tb.den,sar.num, sar.den,
 
 
               // hw_device_setup_for_filter(filter_graph_point, input_streams[0]->dec_ctx->hw_device_ctx);
-for(int i=0;i<filter_graph_point->nb_filters;i++){
+/*for(int i=0;i<filter_graph_point->nb_filters;i++){
     filter_graph_point->filters[i]->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
 
 
 
 }
-           
+ */          
   main_buffersrc_par=av_buffersrc_parameters_alloc();
   memset(main_buffersrc_par,0,sizeof(*main_buffersrc_par));
 
@@ -1729,6 +1860,9 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 
     SubtitleFrame *sub_frame=NULL;
 
+
+  
+
     /*初始化输入ForamtContext
      */
     AVFormatContext *ifmt_ctx = avformat_alloc_context(), *ofmt_ctx = NULL;
@@ -1783,7 +1917,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     char *afilters_descr=NULL;
      /*初始化logo帧*/
     AVFrame *new_logo_frame=av_frame_alloc();
-
+    //AVFrame *new_logo_frame=(*logo_frame);
     new_logo_frame->width=(*logo_frame)->width;
     new_logo_frame->height=(*logo_frame)->height;
     new_logo_frame->format=(*logo_frame)->format;
@@ -1791,15 +1925,19 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     
     int ret;
     /*初始化logo帧的buffer空间*/               
-    ret=av_frame_get_buffer(new_logo_frame, 0) ;
+    ret=av_frame_get_buffer(new_logo_frame, 1) ;
     if (ret<0){
         printf("Error: fill new logo frame failed:%d \n",ret);
 
     }
 
+    (*logo_frame)->hw_frames_ctx=NULL;
+  printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12564 %d \n", (*logo_frame)->data[0]);
     /*拷贝输入logo帧到新的logo帧,避免输入logo帧被外部调用程序释放,如：golang*/      
     ret=av_frame_copy_props(new_logo_frame, (*logo_frame));//拷贝属性
-    ret=av_frame_copy(new_logo_frame, (*logo_frame));//拷贝数据
+ printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12565 %d \n", (*logo_frame));
+    ret=av_frame_copy2(new_logo_frame, (*logo_frame));//拷贝数据
+   printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12566 %d \n", (*logo_frame));
     if (ret<0){
         printf("Error: copy logo frame failed:%d \n",ret);
 
@@ -1817,11 +1955,11 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     filter_graph_des->logo_frame=&new_logo_frame;
     //filter_graph_des->subtitle_frame=&subtitle_empty_frame;
-  
+
     /*手动释放输入logo帧*/ 
-    av_frame_unref(*logo_frame);
-    av_frame_free(logo_frame);
-    logo_frame=NULL;
+    //av_frame_unref(*logo_frame);
+    //av_frame_free(logo_frame);
+    //logo_frame=NULL;
     
     filter_graph_des->if_hw=if_hw;
     filter_graph_des->if_fade=if_logo_fade;
@@ -1834,7 +1972,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     //filter_graph_des->sub_type=sub_type;
     filter_graph_des->subtitle_stream_index=subtitle_index;
    
-
+   
 
     int  i;
     int stream_index = 0;
@@ -1878,7 +2016,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
      * */
     int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **);  
 
-   
+
 
     /*设置日志级别
      * */
@@ -1950,10 +2088,10 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
     /*设置RTSP视频推流协议为TCP
      */ 
-    AVDictionary* options = NULL;
+    //AVDictionary* options = NULL;
 
-    av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "838860000", 0);
+    //av_dict_set(&options, "rtsp_transport", "tcp", 0);
+    //av_dict_set(&options, "buffer_size", "838860000", 0);
 
   
     stream_mapping_size = ifmt_ctx->nb_streams;
@@ -2199,7 +2337,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     av_dump_format(ofmt_ctx, 0, rtsp_push_path, 1);
     //打开输出流文件
     //
-
+ 
     if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, rtsp_push_path, AVIO_FLAG_WRITE);
         if (ret < 0) {
@@ -2663,6 +2801,43 @@ int aligned_frame_height(int h){
   return ENCODE_ALIGN_BITS*(h / ENCODE_ALIGN_BITS);
 
 };
+int av_hwdevice_ctx_create2(AVBufferRef **pdevice_ref, enum AVHWDeviceType type,
+                           const char *device, AVDictionary *opts, int flags)
+{
+    AVBufferRef *device_ref = NULL;
+    AVHWDeviceContext *device_ctx;
+    int ret = 0;
+
+    device_ref = av_hwdevice_ctx_alloc(type);
+    if (!device_ref) {
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+    device_ctx = (AVHWDeviceContext*)device_ref->data;
+
+    if (!device_ctx->internal->hw_type->device_create) {
+        ret = AVERROR(ENOSYS);
+        goto fail;
+    }
+ printf("hwframe_ctx_init %d\n ",device_ctx->internal->hw_type);
+    ret = device_ctx->internal->hw_type->device_create(device_ctx, device,
+                                                       opts, 0);
+
+    if (ret < 0)
+        goto fail;
+
+    ret = av_hwdevice_ctx_init(device_ref);
+    if (ret < 0)
+        goto fail;
+
+    *pdevice_ref = device_ref;
+
+    return 0;
+fail:
+    av_buffer_unref(&device_ref);
+    *pdevice_ref = NULL;
+    return ret;
+}
 
 int set_hwframe_ctx_cuda(AVCodecContext *ctx, AVFilterContext *filter)
 {
@@ -2709,12 +2884,163 @@ int set_hwframe_ctx_cuda(AVCodecContext *ctx, AVFilterContext *filter)
 
      frames_ref=av_buffersink_get_hw_frames_ctx(filter);
 
- printf("################################ %d \n",frames_ref);
+ //printf("################################ %d \n",frames_ref);
      ctx->hw_frames_ctx=av_buffer_ref(frames_ref);
 
 
    } 
 
+}
+ int av_frame_copy2(AVFrame *dst, const AVFrame *src)
+{
+    if (dst->format != src->format || dst->format < 0)
+        return AVERROR(EINVAL);
+
+    if (dst->width > 0 && dst->height > 0)
+        return frame_copy_video2(dst, src);
+    else if (dst->nb_samples > 0 &&
+             (av_channel_layout_check(&dst->ch_layout)
+#if FF_API_OLD_CHANNEL_LAYOUT
+              || dst->channels > 0
+#endif
+            ))
+        return frame_copy_audio2(dst, src);
+
+
+    return AVERROR(EINVAL);
+}
+
+ int frame_copy_video2(AVFrame *dst, const AVFrame *src)
+{
+    const uint8_t *src_data[4];
+    int i, planes;
+
+    if (dst->width  < src->width ||
+        dst->height < src->height)
+        return AVERROR(EINVAL);
+ printf("WWWWWWWWWWWWWWWWWWWWW2 %d %d \n",src->hw_frames_ctx,dst->hw_frames_ctx);
+    if (src->hw_frames_ctx || dst->hw_frames_ctx)
+        return av_hwframe_transfer_data(dst, src, 0);
+ printf("WWWWWWWWWWWWWWWWWWWWW3 \n");
+    planes = av_pix_fmt_count_planes(dst->format);
+    for (i = 0; i < planes; i++)
+        if (!dst->data[i] || !src->data[i])
+            return AVERROR(EINVAL);
+
+    memcpy(src_data, src->data, sizeof(src_data));
+   
+    av_image_copy2(dst->data, dst->linesize,
+                  src_data, src->linesize,
+                  dst->format, src->width, src->height);
+
+    return 0;
+}
+
+ int frame_copy_audio2(AVFrame *dst, const AVFrame *src)
+{
+    int planar   = av_sample_fmt_is_planar(dst->format);
+    int channels = dst->ch_layout.nb_channels;
+    int planes   = planar ? channels : 1;
+    int i;
+
+#if FF_API_OLD_CHANNEL_LAYOUT
+    if (!channels || !src->ch_layout.nb_channels) {
+        if (dst->channels       != src->channels ||
+            dst->channel_layout != src->channel_layout)
+            return AVERROR(EINVAL);
+    }
+    if (!channels) {
+        channels = dst->channels;
+        planes = planar ? channels : 1;
+    }
+#endif
+
+    if (dst->nb_samples != src->nb_samples ||
+#if FF_API_OLD_CHANNEL_LAYOUT
+        (av_channel_layout_check(&dst->ch_layout) &&
+         av_channel_layout_check(&src->ch_layout) &&
+#endif
+        av_channel_layout_compare(&dst->ch_layout, &src->ch_layout))
+#if FF_API_OLD_CHANNEL_LAYOUT
+        )
+#endif
+        return AVERROR(EINVAL);
+
+    for (i = 0; i < planes; i++)
+        if (!dst->extended_data[i] || !src->extended_data[i])
+            return AVERROR(EINVAL);
+
+    av_samples_copy(dst->extended_data, src->extended_data, 0, 0,
+                    dst->nb_samples, channels, dst->format);
+
+    return 0;
+}
+void image_copy_plane2(uint8_t       *dst, ptrdiff_t dst_linesize,
+                             const uint8_t *src, ptrdiff_t src_linesize,
+                             ptrdiff_t bytewidth, int height)
+{
+    if (!dst || !src)
+        return;
+    for (;height > 0; height--) {
+        memcpy(dst, src, bytewidth);
+        dst += dst_linesize;
+        src += src_linesize;
+    }
+}
+void av_image_copy2(uint8_t *dst_data[4], int dst_linesizes[4],
+                   const uint8_t *src_data[4], const int src_linesizes[4],
+                   enum AVPixelFormat pix_fmt, int width, int height)
+{
+    ptrdiff_t dst_linesizes1[4], src_linesizes1[4];
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        dst_linesizes1[i] = dst_linesizes[i];
+        src_linesizes1[i] = src_linesizes[i];
+    }
+
+    image_copy2(dst_data, dst_linesizes1, src_data, src_linesizes1, pix_fmt,
+               width, height, image_copy_plane2);
+}
+void image_copy2(uint8_t *dst_data[4], const ptrdiff_t dst_linesizes[4],
+                       const uint8_t *src_data[4], const ptrdiff_t src_linesizes[4],
+                       enum AVPixelFormat pix_fmt, int width, int height,
+                       void (*copy_plane)(uint8_t *, ptrdiff_t, const uint8_t *,
+                                          ptrdiff_t, ptrdiff_t, int))
+{
+    const AVPixFmtDescriptor *desc = av_pix_fmt_desc_get(pix_fmt);
+
+    if (!desc || desc->flags & AV_PIX_FMT_FLAG_HWACCEL)
+        return;
+
+    if (desc->flags & AV_PIX_FMT_FLAG_PAL) {
+        copy_plane(dst_data[0], dst_linesizes[0],
+                   src_data[0], src_linesizes[0],
+                   width, height);
+        /* copy the palette */
+        if ((desc->flags & AV_PIX_FMT_FLAG_PAL) || (dst_data[1] && src_data[1]))
+            memcpy(dst_data[1], src_data[1], 4*256);
+    } else {
+        int i, planes_nb = 0;
+
+        for (i = 0; i < desc->nb_components; i++)
+            planes_nb = FFMAX(planes_nb, desc->comp[i].plane + 1);
+
+        for (i = 0; i < planes_nb; i++) {
+            int h = height;
+            ptrdiff_t bwidth = av_image_get_linesize(pix_fmt, width, i);
+            if (bwidth < 0) {
+                av_log(NULL, AV_LOG_ERROR, "av_image_get_linesize failed\n");
+                return;
+            }
+            if (i == 1 || i == 2) {
+                h = AV_CEIL_RSHIFT(height, desc->log2_chroma_h);
+            }
+            copy_plane(dst_data[i], dst_linesizes[i],
+                       src_data[i], src_linesizes[i],
+                       bwidth, h);
+        }
+    }
 }
 
 
@@ -2763,12 +3089,12 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->bit_rate= 400000;
     //info->bit_rate= -1;
     //
-    info->audio_channels=6;
+    //info->audio_channels=6;
     //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
     //info->control->subtitle_time_offset=2000;
-    info->control->subtitle_charenc="UTF-8";
+    //info->control->subtitle_charenc="UTF-8";
 //printf("##################1\n");
-    info->control->seek_time=300;
+    //info->control->seek_time=300;
 
 
    // info->control->seek_time=1;

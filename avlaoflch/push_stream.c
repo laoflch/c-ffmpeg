@@ -449,6 +449,7 @@ if (control->seek_time !=0) {
     //int flags=AVSEEK_FLAG_FRAME;
 printf("################## %"PRId64" \n",seek_target);
     int ret=avformat_seek_file(fmt_ctx, -1, seek_min, seek_target,seek_max, 0);
+printf("################## %"PRId64" \n",seek_target);
     if(ret<0){
 
       av_log(NULL,AV_LOG_WARNING,"%s:error while seeking\n ",fmt_ctx->url);

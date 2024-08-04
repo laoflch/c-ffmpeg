@@ -197,7 +197,7 @@ static void blend_single2(image_t * frame, ASS_Image *img)
     unsigned char *dst;
 
     src = img->bitmap;
- printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d %d\n",img->w,img->stride,img->h,img->dst_x);
+ //printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d %d\n",img->w,img->stride,img->h,img->dst_x);
     //dst = frame->buffer + (img->dst_y-(origin_h-frame->height)) * frame->stride + img->dst_x * 4;
 //dst = frame->buffer + img->dst_y * frame->stride + img->dst_x * 4;
 dst=frame->buffer;
@@ -220,7 +220,7 @@ void blend(image_t * frame, ASS_Image *img)
     int cnt = 0;
     ASS_Image *new_img=img;
     while (new_img) {
-        blend_single2(frame, new_img);
+        //blend_single2(frame, new_img);
         ++cnt;
 
         //old_img=img;
@@ -450,6 +450,91 @@ static av_always_inline void blend_slice_yuv(OverlayContext *s ,
     if (main_has_alpha)
         alpha_composite(src, dst, src_w, src_h, dst_w, dst_h, x, y, jobnr, nb_jobs);
 }
+static  void blend_slice_packed_rgb( AVFrame *dst, const AVFrame *src,
+                                   int main_has_alpha, int x, int y,
+                                   int is_straight, int jobnr, int nb_jobs)
+{
+    //OverlayContext *s = ctx->priv;
+    int i, imax, j, jmax;
+    const int src_w = src->width;
+    const int src_h = src->height;
+    const int dst_w = dst->width;
+    const int dst_h = dst->height;
+    uint8_t alpha;          ///< the amount of overlay to blend on to main
+    const int dr = 0x02;//s->main_rgba_map[R];
+    const int dg = 0x01;//s->main_rgba_map[G];
+    const int db = 0x00;//s->main_rgba_map[B];
+    const int da = 0x03;//s->main_rgba_map[A];
+    const int dstep = 0x04;//s->main_pix_step[0];
+    const int sr = 0x02;//s->overlay_rgba_map[R];
+    const int sg = 0x01;//s->overlay_rgba_map[G];
+    const int sb = 0x00;//s->overlay_rgba_map[B];
+    const int sa = 0x03;//s->overlay_rgba_map[A];
+    const int sstep = 0x04;//s->overlay_pix_step[0];
+    int slice_start, slice_end;
+    uint8_t *S, *sp, *d, *dp;
+
+    i = FFMAX(-y, 0);
+    imax = FFMIN3(-y + dst_h, FFMIN(src_h, dst_h), y + src_h);
+
+    slice_start = i + (imax * jobnr) / nb_jobs;
+    slice_end = i + (imax * (jobnr+1)) / nb_jobs;
+
+    sp = src->data[0] + (slice_start)     * src->linesize[0];
+    dp = dst->data[0] + (y + slice_start) * dst->linesize[0];
+
+    for (i = slice_start; i < slice_end; i++) {
+        j = FFMAX(-x, 0);
+        S = sp + j     * sstep;
+        d = dp + (x+j) * dstep;
+
+        for (jmax = FFMIN(-x + dst_w, src_w); j < jmax; j++) {
+            alpha = S[sa];
+
+            // if the main channel has an alpha channel, alpha has to be calculated
+            // to create an un-premultiplied (straight) alpha value
+            if (main_has_alpha && alpha != 0 && alpha != 255) {
+                uint8_t alpha_d = d[da];
+                alpha = UNPREMULTIPLY_ALPHA(alpha, alpha_d);
+            }
+
+            switch (alpha) {
+            case 0:
+                break;
+            case 255:
+                d[dr] = S[sr];
+                d[dg] = S[sg];
+                d[db] = S[sb];
+                break;
+            default:
+                // main_value = main_value * (1 - alpha) + overlay_value * alpha
+                // since alpha is in the range 0-255, the result must divided by 255
+                d[dr] = is_straight ? FAST_DIV255(d[dr] * (255 - alpha) + S[sr] * alpha) :
+                        FFMIN(FAST_DIV255(d[dr] * (255 - alpha)) + S[sr], 255);
+                d[dg] = is_straight ? FAST_DIV255(d[dg] * (255 - alpha) + S[sg] * alpha) :
+                        FFMIN(FAST_DIV255(d[dg] * (255 - alpha)) + S[sg], 255);
+                d[db] = is_straight ? FAST_DIV255(d[db] * (255 - alpha) + S[sb] * alpha) :
+                        FFMIN(FAST_DIV255(d[db] * (255 - alpha)) + S[sb], 255);
+            }
+            if (main_has_alpha) {
+                switch (alpha) {
+                case 0:
+                    break;
+                case 255:
+                    d[da] = S[sa];
+                    break;
+                default:
+                    // apply alpha compositing: main_alpha += (1-main_alpha) * overlay_alpha
+                    d[da] += FAST_DIV255((255 - d[da]) * S[sa]);
+                }
+            }
+            d += dstep;
+            S += sstep;
+        }
+        dp += dst->linesize[0];
+        sp += src->linesize[0];
+    }
+}
 
 static int blend_slice_yuv420(OverlayContext *s, AVFrame *dst,AVFrame *src, int jobnr, int nb_jobs)
 {
@@ -458,7 +543,13 @@ static int blend_slice_yuv420(OverlayContext *s, AVFrame *dst,AVFrame *src, int 
   blend_slice_yuv(s, dst, src, 1, 1, 0, s->x, s->y, 1, jobnr, nb_jobs);
     return 0;
 }
-
+static int blend_slice_rgba( AVFrame *dst,AVFrame *src, int x,int y,int jobnr, int nb_jobs)
+{
+    //OverlayContext *s = ctx->priv;
+  //printf("$$$$$$$$$$$$$$$234i %d %d %d\n",s,dst,src);
+  blend_slice_packed_rgb(dst, src,  0, x, y, 1, jobnr, nb_jobs);
+    return 0;
+}
 
 int overlay_image(OverlayContext *s,AVFrame *dst,AVFrame *src,int x,int y){
 

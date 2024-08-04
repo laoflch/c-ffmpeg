@@ -2,8 +2,8 @@
 /*
 */
 
-#ifndef PUSH_STREAM_LAOFLCH_H
-#define PUSH_STREAM_LAOFLCH_H
+#ifndef PUSH_STREAM_CUDA_LAOFLCH_H
+#define PUSH_STREAM_CUDA_LAOFLCH_H
 
 #include "complex_filter.h"
 #include "drawutils.h"
@@ -11,7 +11,7 @@
 
 //extern static void *grow_array;
 
-/*  push2trtsp_sub_logo
+/*  push2trtsp_sub_logo_cuda
  * 将视频流通过rtsp协议推送到直播服务器，硬编字幕,并实现logo 的周期淡入淡出
  * 
  *
@@ -38,4 +38,4 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
 int handle_subtitle2(AVFrame **frame,int64_t pts,AssContext *ass,AVRational time_base);
 //int handle_sub(AVFrame *frame,AssContext *ass,AVRational time_base);
 
-#endif /*PUSH_STREAM_LAOFLCH_H*/
+#endif /*PUSH_STREAM_CUDA_LAOFLCH_H*/
