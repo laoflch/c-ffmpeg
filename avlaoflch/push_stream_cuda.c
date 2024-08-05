@@ -1038,9 +1038,9 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                  );
 
                //sleep(5);
- printf("@@@@@@@@@@@@@@@@@@@@@@@234 %s \n",args.str );
+ //printf("@@@@@@@@@@@@@@@@@@@@@@@234 %s \n",args.str );
                ret = avfilter_graph_parse2(filter_graph_point, args.str, &inputs, &outputs);
- printf("@@@@@@@@@@@@@@@@@@@@@@@235\n" );
+ //printf("@@@@@@@@@@@@@@@@@@@@@@@235\n" );
                if (ret < 0) {
                    printf("Cannot parse2 graph\n");
                    return ret;
@@ -1189,9 +1189,9 @@ main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
  /*打开编码Context
             */
 
-(*enc_ctx)->hw_device_ctx=dec_ctx->hw_device_ctx;
+(*enc_ctx)->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
 
-(*enc_ctx)->hw_frames_ctx=frame->hw_frames_ctx;
+(*enc_ctx)->hw_frames_ctx=av_buffer_ref(frame->hw_frames_ctx);
 
 av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
             if ((ret = avcodec_open2(*enc_ctx, (*enc_ctx)->codec,&output_streams[0]->encoder_opts )) < 0) {
@@ -1323,7 +1323,7 @@ av_dict_set(&output_streams[0]->encoder_opts,"preset","fast",0);
                     }else if(filter_graph_des->sub_frame){
 
  bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
-                      printf("ttttttttttttt %d \n",if_empty_subtitle);
+                      //printf("ttttttttttttt %d \n",if_empty_subtitle);
                  handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
 
                  if(if_empty_subtitle){
@@ -1878,7 +1878,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     /*初始化视频滤镜*/
 
     AVFilterGraph **filter_graph= (AVFilterGraph **)av_malloc(sizeof(AVFilterGraph *));
-    *filter_graph=NULL;
+    //*filter_graph=NULL;
     //主源
     AVFilterContext **mainsrc_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
     //logo源 
@@ -1896,7 +1896,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     filter_graph_des->overlay_ctx=NULL;
 
 
-    printf("###############f %s \n",filter_graph_des->subtitle_path);
+    //printf("###############f %s \n",filter_graph_des->subtitle_path);
 
     /*复制字幕文件名*/
     strcpy(filter_graph_des->subtitle_path, subtitle_file_path);
@@ -1932,12 +1932,12 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     }
 
     (*logo_frame)->hw_frames_ctx=NULL;
-  printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12564 %d \n", (*logo_frame)->data[0]);
+  //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12564 %d \n", (*logo_frame)->data[0]);
     /*拷贝输入logo帧到新的logo帧,避免输入logo帧被外部调用程序释放,如：golang*/      
     ret=av_frame_copy_props(new_logo_frame, (*logo_frame));//拷贝属性
- printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12565 %d \n", (*logo_frame));
-    ret=av_frame_copy2(new_logo_frame, (*logo_frame));//拷贝数据
-   printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12566 %d \n", (*logo_frame));
+ //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12565 %d \n", (*logo_frame));
+    ret=av_frame_copy(new_logo_frame, (*logo_frame));//拷贝数据
+   //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12566 %d \n", (*logo_frame));
     if (ret<0){
         printf("Error: copy logo frame failed:%d \n",ret);
 
@@ -1957,8 +1957,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     //filter_graph_des->subtitle_frame=&subtitle_empty_frame;
 
     /*手动释放输入logo帧*/ 
-    //av_frame_unref(*logo_frame);
-    //av_frame_free(logo_frame);
+    av_frame_unref(*logo_frame);
+    av_frame_free(logo_frame);
     //logo_frame=NULL;
     
     filter_graph_des->if_hw=if_hw;
@@ -2368,6 +2368,13 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     int count_1,count_2=0;
     while (!task_handle_process_info->control->task_cancel) {
 
+
+      //if(task_handle_process_info->pass_duration>3000000){
+
+
+       // task_handle_process_info->control->task_cancel=true;
+
+      //}
    /*处理控制速度
          */
         
@@ -2495,7 +2502,7 @@ return ret;
 
         task_handle_process_info->control->current_seek_pos_time=av_rescale_q(input_streams[stream_mapping[0]]->pts, input_streams[stream_mapping[0]]->st->time_base, AV_TIME_BASE_Q);
                ret=handle_seek(ifmt_ctx,task_handle_process_info->control );
-      printf("************************* %d %d  %f \n",0,1,0);
+      //printf("************************* %d %d  %f \n",0,1,0);
         //task_handle_process_info->control->subtitle_time_offset+=task_handle_process_info->control->current_seek_pos_time/1000;
         if(ret==0){
 
@@ -2536,7 +2543,7 @@ input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time
             break;
         }  
 
-        av_log(ifmt_ctx,AV_LOG_DEBUG," input pkt duration:%"PRId64"\n",pkt->duration);
+        //av_log(ifmt_ctx,AV_LOG_DEBUG," input pkt duration:%"PRId64"\n",pkt->duration);
   end_frame++;
 
         in_stream  = ifmt_ctx->streams[pkt->stream_index];
@@ -2702,26 +2709,28 @@ ist->next_pts = ist->pts =pkt->pts;
 end:
     av_frame_free(&frame);
     av_frame_free(&new_logo_frame);
-   
+    printf("free mem: %d \n",1);
     if(sub_frame)
        free_subtitle_frame(sub_frame);
     
-
+ printf("free mem: %d \n",2);
     avformat_close_input(&ifmt_ctx);
     avformat_free_context(ifmt_ctx);
+ printf("free mem: %d \n",3);
 
     /* close output */
     if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
         avio_closep(&ofmt_ctx->pb);
     av_write_trailer(ofmt_ctx);
+ printf("free mem: %d \n",4);
 
     avformat_free_context(ofmt_ctx);
-
+ printf("free mem: %d \n",5);
     av_packet_free(&pkt);
     av_packet_free(&out_pkt);
 
     //释放输入流的解码AVCodec_Context
-
+ printf("free mem: %d \n",6);
     for(int i=0;i<nb_input_streams;i++){
 
         //av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
@@ -2730,36 +2739,56 @@ end:
         avcodec_free_context(&input_streams[i]->dec_ctx);
 
     }
+    av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
     //释放输出流的编码AVCodec_Context
     for(int i=0;i<nb_output_streams;i++){
         //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
         //avcodec_close(output_streams[i]->enc_ctx);
-
+        //
+        //avcodec_close(output_streams[i]->enc_ctx);
+        //
+        //
+        //output_streams[i]->enc_ctx->hw_device_ctx=NULL;
+        //av_buffer_unref(output_streams[i]->enc_ctx->hw_device_ctx);
+        av_log(NULL,AV_LOG_INFO,"free enc_ctx num:%d \n",i);
         avcodec_free_context(&output_streams[i]->enc_ctx);
 
     }
     
-   
+    av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
+
     av_buffer_unref(hw_device_ctx);
 
-   
+    printf("free mem: %d \n",9);
     if(ret!=AVERROR(ECONNREFUSED)){
 
         avfilter_free(*mainsrc_ctx);
         avfilter_free(*logo_ctx);
+        avfilter_free(*subtitle_ctx);
         avfilter_free(*resultsink_ctx);
+
 
        
     }
 
-     
+      printf("free mem: %d \n",10);
+
+
     //释放滤镜
+    //
+    //if(filter_graph){
     avfilter_graph_free(filter_graph);
+
+    //}
+  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
     //if(afilter_graph)
     avfilter_free(*abuffersrc_ctx);
+  av_log(NULL,AV_LOG_INFO,"free abuffersrc_ctx \n");
     avfilter_free(*abuffersink_ctx);
+  av_log(NULL,AV_LOG_INFO,"free abuffersink_ctx \n");
 
     avfilter_graph_free(afilter_graph);
+  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
     if(filter_graph_des->ass) 
         av_free(filter_graph_des->ass);
     
@@ -2770,17 +2799,17 @@ end:
         av_free(filter_graph_des->subtitle_path);
     if(filter_graph_des)
         av_free(filter_graph_des);
-
+  av_log(NULL,AV_LOG_INFO,"free filter_graph_des \n");
     //av_freep只能用于指向指针的指针,因为还需要对指针赋NULL，否则找不到地址
 
     av_freep(input_streams);
     av_freep(output_streams);
     
 
-    if (ret < 0 && ret != AVERROR_EOF) {
-        fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
-        return ret;
-    }
+    //if (ret < 0 && ret != AVERROR_EOF) {
+     //   fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
+      //  return ret;
+    //}
 
     return 0;
 

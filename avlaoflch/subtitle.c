@@ -626,10 +626,10 @@ printf("blend_row %d %d %d \n",overlay_ctx->blend_row[0],overlay_ctx->blend_row[
 
 
 void free_subtitle_frame(SubtitleFrame *subtitle_frame){
-
     if(subtitle_frame){
         if (subtitle_frame->sub_frame){
             av_frame_unref(subtitle_frame->sub_frame);
+
 
             av_frame_free(&(subtitle_frame->sub_frame));
         }
@@ -643,6 +643,9 @@ SubtitleFrame *alloc_subtitle_frame(){
 
 
     SubtitleFrame *subtitle_frame=av_malloc(sizeof(*subtitle_frame));
+
+
+    subtitle_frame->sub_frame=NULL;
 
     //if(subtitle_frame){
 

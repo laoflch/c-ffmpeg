@@ -638,29 +638,36 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
           AVSubtitleRect *sub_rect=subtitle.rects[i];
 
 
-          AVFrame *sub_frame=av_frame_alloc();
 
-          sub_frame->width=sub_rect->w;
-          sub_frame->height=sub_rect->h;
-          sub_frame->format=AV_PIX_FMT_YUVA420P;
+          if(subtitle_frame->sub_frame==NULL){
 
-          ret=av_frame_get_buffer(sub_frame, 0);
+
+         subtitle_frame->sub_frame=av_frame_alloc();
+
+          subtitle_frame->sub_frame->width=sub_rect->w;
+          subtitle_frame->sub_frame->height=sub_rect->h;
+          subtitle_frame->sub_frame->format=AV_PIX_FMT_YUVA420P;
+
+          ret=av_frame_get_buffer(subtitle_frame->sub_frame, 1);
           if (ret<0){
               printf("Error: fill new logo frame failed:%d \n",ret);
 
           }
 
+          }else{
+            av_frame_unref(subtitle_frame->sub_frame);
+          }
  //printf("frame:%d %d\n",sub_frame,subtitle_frame);
           //将pgs的字幕转为
           struct SwsContext *sws_ctx= sws_getContext(sub_rect->w,sub_rect->h,AV_PIX_FMT_PAL8,sub_rect->w , sub_rect->h,AV_PIX_FMT_YUVA420P,SWS_BILINEAR,NULL,NULL,NULL);
 
           
-          sws_scale(sws_ctx,(const uint8_t * const)sub_rect->data,sub_rect->linesize,0,sub_rect->h,sub_frame->data,sub_frame->linesize);
+          sws_scale(sws_ctx,(const uint8_t * const)sub_rect->data,sub_rect->linesize,0,sub_rect->h,subtitle_frame->sub_frame->data,subtitle_frame->sub_frame->linesize);
 
 
           sws_freeContext(sws_ctx);
 
-          subtitle_frame->sub_frame=sub_frame;
+          //subtitle_frame->sub_frame=sub_frame;
 
           subtitle_frame->pts=subtitle.pts;
 
