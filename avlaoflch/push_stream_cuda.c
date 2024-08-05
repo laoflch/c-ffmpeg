@@ -1059,7 +1059,7 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
   memset(main_buffersrc_par,0,sizeof(*main_buffersrc_par));
 
 main_buffersrc_par->format=AV_PIX_FMT_NONE;
-main_buffersrc_par->hw_frames_ctx=frame->hw_frames_ctx;
+main_buffersrc_par->hw_frames_ctx=av_buffer_ref(frame->hw_frames_ctx);
   //根据 名字 找到 AVFilterContext
                mainsrc_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffer_0");
 
@@ -1878,7 +1878,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     /*初始化视频滤镜*/
 
     AVFilterGraph **filter_graph= (AVFilterGraph **)av_malloc(sizeof(AVFilterGraph *));
-    //*filter_graph=NULL;
+    *filter_graph=NULL;
     //主源
     AVFilterContext **mainsrc_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
     //logo源 
@@ -2372,9 +2372,9 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
       //if(task_handle_process_info->pass_duration>3000000){
 
 
-       // task_handle_process_info->control->task_cancel=true;
+//        task_handle_process_info->control->task_cancel=true;
 
-      //}
+ //     }
    /*处理控制速度
          */
         
@@ -2709,37 +2709,42 @@ ist->next_pts = ist->pts =pkt->pts;
 end:
     av_frame_free(&frame);
     av_frame_free(&new_logo_frame);
-    printf("free mem: %d \n",1);
+    av_log(NULL,AV_LOG_INFO,"free frame & new_logo_frame:  \n");
     if(sub_frame)
        free_subtitle_frame(sub_frame);
     
- printf("free mem: %d \n",2);
+  av_log(NULL,AV_LOG_INFO,"free sub_frame: \n");
     avformat_close_input(&ifmt_ctx);
     avformat_free_context(ifmt_ctx);
- printf("free mem: %d \n",3);
+ av_log(NULL,AV_LOG_INFO,"free ifmt_ctx: \n");
 
     /* close output */
     if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
         avio_closep(&ofmt_ctx->pb);
     av_write_trailer(ofmt_ctx);
- printf("free mem: %d \n",4);
+  
 
     avformat_free_context(ofmt_ctx);
- printf("free mem: %d \n",5);
+av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
+ 
     av_packet_free(&pkt);
     av_packet_free(&out_pkt);
 
     //释放输入流的解码AVCodec_Context
- printf("free mem: %d \n",6);
+ av_log(NULL,AV_LOG_INFO,"free pkt & out_pkt: \n");
+
+    av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
     for(int i=0;i<nb_input_streams;i++){
 
         //av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
         //avcodec_close(input_streams[i]->dec_ctx);
+ av_log(NULL,AV_LOG_INFO,"free dec_ctx num:%d \n",i);
 
         avcodec_free_context(&input_streams[i]->dec_ctx);
 
     }
-    av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
+   av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
+   
     //释放输出流的编码AVCodec_Context
     for(int i=0;i<nb_output_streams;i++){
         //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
@@ -2754,12 +2759,12 @@ end:
         avcodec_free_context(&output_streams[i]->enc_ctx);
 
     }
-    
-    av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
+ 
+   
 
     av_buffer_unref(hw_device_ctx);
 
-    printf("free mem: %d \n",9);
+     av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
     if(ret!=AVERROR(ECONNREFUSED)){
 
         avfilter_free(*mainsrc_ctx);
@@ -2771,13 +2776,14 @@ end:
        
     }
 
-      printf("free mem: %d \n",10);
+      av_log(NULL,AV_LOG_INFO,"free mainsrc_ctx & logo_ctx & subtitle_ctx & resultsink_ctx \n");
 
 
     //释放滤镜
     //
     //if(filter_graph){
     avfilter_graph_free(filter_graph);
+
 
     //}
   av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
