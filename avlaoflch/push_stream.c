@@ -447,9 +447,9 @@ if (control->seek_time !=0) {
     int64_t seek_max=seek_timestamp;
 
     //int flags=AVSEEK_FLAG_FRAME;
-printf("################## %"PRId64" \n",seek_target);
+//printf("################## %"PRId64" \n",seek_target);
     int ret=avformat_seek_file(fmt_ctx, -1, seek_min, seek_target,seek_max, 0);
-printf("################## %"PRId64" \n",seek_target);
+//printf("################## %"PRId64" \n",seek_target);
     if(ret<0){
 
       av_log(NULL,AV_LOG_WARNING,"%s:error while seeking\n ",fmt_ctx->url);
@@ -628,11 +628,11 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
      //printf("got_frame:%d\n",got_frame);
 
     if (ret >= 0&&got_frame>0) {
- printf("subtitle fromat:%d\n",subtitle.format);
+ //printf("subtitle fromat:%d\n",subtitle.format);
       if(subtitle.format==0){
-printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+//printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
- printf("num_rects:%d\n",subtitle.num_rects);
+ //printf("num_rects:%d\n",subtitle.num_rects);
         if(subtitle.num_rects>0){
         for(size_t i=0;i<subtitle.num_rects;i++){
           AVSubtitleRect *sub_rect=subtitle.rects[i];
@@ -644,19 +644,22 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
 
          subtitle_frame->sub_frame=av_frame_alloc();
 
-          subtitle_frame->sub_frame->width=sub_rect->w;
+        
+          }else{
+            av_frame_unref(subtitle_frame->sub_frame);
+                    }
+
+
+subtitle_frame->sub_frame->width=sub_rect->w;
           subtitle_frame->sub_frame->height=sub_rect->h;
           subtitle_frame->sub_frame->format=AV_PIX_FMT_YUVA420P;
 
-          ret=av_frame_get_buffer(subtitle_frame->sub_frame, 1);
-          if (ret<0){
+  ret=av_frame_get_buffer(subtitle_frame->sub_frame, 0);
+  if (ret<0){
               printf("Error: fill new logo frame failed:%d \n",ret);
 
           }
 
-          }else{
-            av_frame_unref(subtitle_frame->sub_frame);
-          }
  //printf("frame:%d %d\n",sub_frame,subtitle_frame);
           //将pgs的字幕转为
           struct SwsContext *sws_ctx= sws_getContext(sub_rect->w,sub_rect->h,AV_PIX_FMT_PAL8,sub_rect->w , sub_rect->h,AV_PIX_FMT_YUVA420P,SWS_BILINEAR,NULL,NULL,NULL);
@@ -675,7 +678,7 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
 
           subtitle_frame->is_display=1;
 
-          printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+          //printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
 
 
@@ -688,7 +691,8 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
             subtitle_frame->duration=subtitle.end_display_time-subtitle.start_display_time;
             //if(subtitle_frame->sub_frame){
                 av_frame_unref(subtitle_frame->sub_frame);
-                av_frame_free(&(subtitle_frame->sub_frame));
+                //av_frame_free(&(subtitle_frame->sub_frame));
+                //subtitle_frame->sub_frame=NULL;
             //}
             subtitle_frame->is_display=0;
 

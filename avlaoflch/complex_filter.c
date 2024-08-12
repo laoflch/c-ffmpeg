@@ -4168,7 +4168,7 @@ av_cold int init(AssContext *ass)
    
     ass_set_fonts_dir(ass->library, ass->fontsdir);
     ass_set_extract_fonts(ass->library, 1);
-printf("$$$$#$$$$#$$$$#------------$$$$#$$$#\n");
+//printf("$$$$#$$$$#$$$$#------------$$$$#$$$#\n");
     ass->renderer = ass_renderer_init(ass->library);
     if (!ass->renderer) {
         av_log(NULL, AV_LOG_ERROR, "Could not initialize libass renderer.\n");
@@ -6506,7 +6506,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
 
     frames_ctx = (AVHWFramesContext *)(hw_frames_ref->data);
     frames_ctx->format    = AV_PIX_FMT_CUDA;
-    frames_ctx->sw_format = AV_PIX_FMT_YUV420P;
+    frames_ctx->sw_format = ctx->sw_pix_fmt;
     frames_ctx->width     = ctx->width;
     frames_ctx->height    = ctx->height;
     //frames_ctx->initial_pool_size = 20;
