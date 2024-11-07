@@ -88,7 +88,7 @@ enum { RED = 0, GREEN, BLUE, ALPHA };
 static int decode_interrupt_cb(void *ctx)
 {
 
-  printf("intrrupt for input steam");
+  //printf("intrrupt for input steam");
     return 0;
 
 }
@@ -3848,7 +3848,7 @@ int simple_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame 
         out_pkt->stream_index=stream_mapping[pkt->stream_index];
  out_stream = ofmt_ctx->streams[out_pkt->stream_index];
 
-printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,(*enc_ctx)->time_base.den);
+//printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,(*enc_ctx)->time_base.den);
        // out_pkt->pts = av_rescale_q_rnd(out_pkt->pts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         //out_pkt->dts = av_rescale_q_rnd(out_pkt->dts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         //out_pkt->duration = av_rescale_q_rnd(out_pkt->duration, input_streams[pkt->stream_index]->st->time_base,  out_stream->time_base,AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
@@ -6509,7 +6509,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
     frames_ctx->sw_format = ctx->sw_pix_fmt;
     frames_ctx->width     = ctx->width;
     frames_ctx->height    = ctx->height;
-    //frames_ctx->initial_pool_size = 20;
+    frames_ctx->initial_pool_size = 20;
     if ((err = av_hwframe_ctx_init(hw_frames_ref)) < 0) {
         fprintf(stderr, "Failed to initialize VAAPI frame context."
                 "Error code: %s\n",av_err2str(err));

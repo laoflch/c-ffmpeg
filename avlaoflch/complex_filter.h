@@ -151,6 +151,8 @@ typedef struct FilterGraph {
     //enum SubtitleType sub_type;
     int subtitle_stream_index;
 
+    AVFifoBuffer *packet_queue;
+
     AVCodecContext *subtitle_dec_ctx;
     bool if_hw;
 
@@ -195,6 +197,7 @@ typedef struct InputStream {
     int64_t       start_pts;
     int64_t       start_time;
     int64_t       current_pts;
+    double           current_delay_duration;
     int64_t       origin_stream_pts;
     int64_t       origin_stream_dts;
     int           wrap_correction_done;

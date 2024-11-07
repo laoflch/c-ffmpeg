@@ -554,7 +554,7 @@ int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *f
         out_pkt->stream_index=stream_mapping[pkt->stream_index];
  out_stream = ofmt_ctx->streams[out_pkt->stream_index];
 
-printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,ofmt_ctx->streams[0]);
+//printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,out_stream->time_base.den);
        // out_pkt->pts = av_rescale_q_rnd(out_pkt->pts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         //out_pkt->dts = av_rescale_q_rnd(out_pkt->dts, input_streams[pkt->stream_index]->st->time_base, out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
         //out_pkt->duration = av_rescale_q_rnd(out_pkt->duration, input_streams[pkt->stream_index]->st->time_base,  out_stream->time_base,AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
@@ -570,10 +570,13 @@ printf("origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" p
         //out_pkt->pos=origin_pos;
          //printf("########77777########%d %d\n",out_pkt->stream_index,stream_mapping[out_pkt->stream_index]);
       //av_packet_rescale_ts(out_pkt,in_stream->time_base, out_stream->time_base);
-      av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,out_stream->time_base);
-
+      //av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,out_stream->time_base);
+        //out_pkt->pts=pkt->pts;
+        //out_pkt->dts=pkt->dts;
         //out_pkt->pos = -1;
         //out_pkt-
+//printf("2origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,ofmt_ctx->streams[0]);
+        //out_pkt->dts=out_pkt->pts-(pkt->pts-pkt->dts);
          log_packet(ofmt_ctx, out_pkt, "out");
 
         ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
@@ -2065,7 +2068,7 @@ input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time
             filter_graph_des->subtitle_charenc=task_handle_process_info->control->subtitle_charenc;
         }
 //
-//log_packet(ifmt_ctx, pkt, "in-2");
+log_packet(ifmt_ctx, pkt, "in-2");
 /*
          if(pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts){
             pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
