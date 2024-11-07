@@ -6509,7 +6509,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
     frames_ctx->sw_format = ctx->sw_pix_fmt;
     frames_ctx->width     = ctx->width;
     frames_ctx->height    = ctx->height;
-    frames_ctx->initial_pool_size = 20;
+    frames_ctx->initial_pool_size = 50;
     if ((err = av_hwframe_ctx_init(hw_frames_ref)) < 0) {
         fprintf(stderr, "Failed to initialize VAAPI frame context."
                 "Error code: %s\n",av_err2str(err));
