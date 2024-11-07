@@ -153,6 +153,9 @@ typedef struct FilterGraph {
 
     AVFifoBuffer *packet_queue;
 
+    int64_t encode_delay;
+    int64_t encode_start;
+
     AVCodecContext *subtitle_dec_ctx;
     bool if_hw;
 

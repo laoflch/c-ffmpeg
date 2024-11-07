@@ -1540,7 +1540,13 @@ av_frame_unref(frame);
 
                 //    frame->pict_type=frame_pict_type;
                  //   frame->key_frame=frame_key;
+if(filter_graph_des->encode_start==-1){
 
+
+                         filter_graph_des->encode_start=av_gettime_relative();
+
+  
+                       }
          
                    ret_enc = avcodec_send_frame(*enc_ctx, frame);
 av_frame_unref(frame);
@@ -1555,6 +1561,7 @@ av_frame_unref(frame);
                 //if (filter_graph_des->if_hw){
                  //   av_frame_unref(hw_frame);
                 //}
+
 
 
 
@@ -1582,12 +1589,23 @@ av_frame_unref(frame);
 
   //printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&2 \n");
                      if (out_pkt->data!=NULL) {
+
+                       if(filter_graph_des->encode_delay==-1){
+
+
+                         filter_graph_des->encode_delay=av_rescale_q(av_gettime_relative()-filter_graph_des->encode_start,AV_TIME_BASE_Q,input_streams[stream_mapping[out_pkt->stream_index]]->st->time_base);
+
+  
+                       }
+
+                       printf("encode_delay:%"PRId64" \n",filter_graph_des->encode_delay);
+
 //av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,AV_TIME_BASE_Q);
-PacketDes out_pkd;
-av_fifo_generic_read(filter_graph_des->packet_queue, &out_pkd, sizeof(out_pkd), NULL);
-                         out_pkt->pts=out_pkd.pts+14600;
-                         out_pkt->dts=out_pkd.dts+14600;
-                         out_pkt->duration=out_pkd.duration;
+                       PacketDes out_pkd;
+                       av_fifo_generic_read(filter_graph_des->packet_queue, &out_pkd, sizeof(out_pkd), NULL);
+                       out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
+                       out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
+                       out_pkt->duration=out_pkd.duration;
                          //out_pkt->pts=av_gettime_relative()-input_streams[pkt->stream_index]->start_time;
                         av_log(NULL,AV_LOG_DEBUG, "pull packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",out_pkd.pts,out_pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
                        printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration,out_pkt->dts%8);
@@ -1966,7 +1984,9 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     filter_graph_des->ass=NULL;
     filter_graph_des->overlay_ctx=NULL;
 
-    filter_graph_des->packet_queue=av_fifo_alloc(sizeof(PacketDes)*1000);
+    filter_graph_des->packet_queue=av_fifo_alloc(sizeof(PacketDes)*10);
+    filter_graph_des->encode_delay=-1;
+    filter_graph_des->encode_start=-1;
 
 
     //printf("###############f %s \n",filter_graph_des->subtitle_path);
@@ -2164,7 +2184,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     AVDictionary* options = NULL;
 
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "83886000", 0);
+    av_dict_set(&options, "buffer_size", "8388600", 0);
 
   
     stream_mapping_size = ifmt_ctx->nb_streams;
@@ -2394,6 +2414,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
 
                av_dict_set(&output_stream->encoder_opts,"preset","p4",0);
+
+               //nvenc的preset不宜过低，过低也将出现视频卡顿
 
           // }
            }
