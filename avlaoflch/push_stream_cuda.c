@@ -915,9 +915,9 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
     if(pkt!=NULL){
   //      AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
         int ret,s_pts,frame_key,frame_pict_type;
-        int64_t s_frame_pts;
+        int64_t s_frame_pts,s_pkt_duration;
 
-        int delays[8]={1,2,4,2,3,11,6,3};
+        //int delays[8]={1,2,4,2,3,11,6,3};
         //uint8_t *sd=av_packet_get_side_data(pkt, AV_PKT_DATA_QUALITY_STATS,NULL);
  //sw_frame=av_frame_alloc();
 
@@ -947,19 +947,22 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
         while (ret >= 0) {
             ret = avcodec_receive_frame(dec_ctx, frame);
  //printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration:%d base_time:{%d %d} \n",frame->pts,av_rescale_q(pkt->pts-pkt->dts, (*enc_ctx)->time_base, input_streams[0]->st->time_base),pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
- printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration:%d base_time:{%d %d} \n",frame->pts,pkt->dts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
+ printf("dec_frame_video:pkt_pts:%"PRId64" pkt_dts:%"PRId64" duration:%d base_time:{%d %d} frame_pts:%"PRId64"  pic_type:%f frame_rate:%d \n",pkt->pts,pkt->dts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,frame->pts,av_q2d(dec_ctx->framerate));
 //printf("dec_frame:pts:%"PRId64" dts:%"PRId64" base_time:{%d %d} \n",frame->pts,pkt->pts-pkt->dts,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
             if (ret == AVERROR(EAGAIN)) {
         
                 av_frame_unref(frame);
                 av_packet_unref(pkt);
+                printf("1 \n");
                               return ret;
 
             }else if( ret == AVERROR_EOF){
+ printf("2 \n");
                 return 0;
             }else if (ret < 0) {
                 av_log(NULL, "Error during decoding %d \n ",ret);
                 av_frame_unref(frame);
+ printf("3 \n");
                 return 1 ;
             }
 
@@ -1464,13 +1467,13 @@ if(1){
                  //logo_frame=NULL;
    //av_frame_unref(subtitle_empty_frame);
    //              av_frame_free(&subtitle_empty_frame);
-if(filter_graph_des->encode_start==-1){
+/*if(filter_graph_des->encode_start==-1){
 
 
                          filter_graph_des->encode_start=av_gettime_relative();
 
   
-                       }
+                       }*/
                 //处理主流
                  ret = av_buffersrc_add_frame_flags(*mainsrc_ctx, frame,AV_BUFFERSRC_FLAG_PUSH);
 
@@ -1589,31 +1592,33 @@ av_frame_unref(frame);
                          av_log(NULL,AV_LOG_ERROR, "Error during encoding\n",NULL);
                          break; 
                      }
- av_log(NULL,AV_LOG_DEBUG, "encodec packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",out_pkt->pts,out_pkt->dts);
+ av_log(NULL,AV_LOG_DEBUG, "encodec packet pts:%"PRId64" dts:%"PRId64" f_pts:%"PRId64" duration:%"PRId64" space:%d \n",out_pkt->pts,out_pkt->dts,frame->pts,out_pkt->duration);
   //printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&2 \n");
                      if (out_pkt->data!=NULL) {
 
-                       if(filter_graph_des->encode_delay==-1){
+                       /*if(filter_graph_des->encode_delay==-1){
 
 
                          filter_graph_des->encode_delay=av_rescale_q(av_gettime_relative()-filter_graph_des->encode_start,AV_TIME_BASE_Q,input_streams[stream_mapping[out_pkt->stream_index]]->st->time_base);
 
   
-                       }
+                       }*/
 
-                       printf("encode_delay:%"PRId64" \n",filter_graph_des->encode_delay);
-
+                       //printf("encode_delay:%"PRId64" \n",filter_graph_des->encode_delay);
+//直接使用编码后out_pkt的pts和dts,省去处理b帧和I帧及顺序问题
 //av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,AV_TIME_BASE_Q);
-                       PacketDes out_pkd;
-                       av_fifo_generic_read(filter_graph_des->packet_queue, &out_pkd, sizeof(out_pkd), NULL);
-                       out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
-                       out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
-                       out_pkt->duration=out_pkd.duration;
-av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+                       //PacketDes out_pkd;
+                       //av_fifo_generic_read(filter_graph_des->packet_queue, &out_pkd, sizeof(out_pkd), NULL);
+                       //out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
+                       //out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
+                       //在调整帧率的时候需求调整这个值enc->framerate/dec->framerate，
+                       out_pkt->duration=1;pkt->duration;//out_pkd.duration;
+//av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
 
 
                          //out_pkt->pts=av_gettime_relative()-input_streams[pkt->stream_index]->start_time;
-                        av_log(NULL,AV_LOG_DEBUG, "pull packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",out_pkd.pts,out_pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
+                        //av_log(NULL,AV_LOG_DEBUG, "pull packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",out_pkd.pts,out_pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
                        printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration,out_pkt->dts%8);
 
                          //out_pkt->dts=out_pkt->pts-av_rescale_q(pkt->duration, output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base, AV_TIME_BASE_Q);//-av_rescale_q(pkt->pts-pkt->dts,(*enc_ctx)->time_base,AV_TIME_BASE_Q);
@@ -1990,9 +1995,9 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     filter_graph_des->ass=NULL;
     filter_graph_des->overlay_ctx=NULL;
 
-    filter_graph_des->packet_queue=av_fifo_alloc(sizeof(PacketDes)*10);
-    filter_graph_des->encode_delay=-1;
-    filter_graph_des->encode_start=-1;
+    //filter_graph_des->packet_queue=av_fifo_alloc(sizeof(PacketDes)*10);
+    //filter_graph_des->encode_delay=-1;
+    //filter_graph_des->encode_start=-1;
 
 
     //printf("###############f %s \n",filter_graph_des->subtitle_path);
@@ -2419,7 +2424,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
 
-               av_dict_set(&output_stream->encoder_opts,"preset","p4",0);
+               av_dict_set(&output_stream->encoder_opts,"preset","p5",0);
 
                //nvenc的preset不宜过低，过低也将出现视频卡顿
 
@@ -2517,7 +2522,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=0.5;//-1 - 1
+int cache_time=1.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
                 if (pts > now+AV_TIME_BASE*cache_time){
                   
@@ -2765,20 +2770,20 @@ ist->next_pts = ist->pts =pkt->pts;
                 //转换time_base,从steam->enc_ctx
                 if (pkt->data!=NULL) {
 
-                  if(av_fifo_space(filter_graph_des->packet_queue)<sizeof(PacketDes)){
+                /*  if(av_fifo_space(filter_graph_des->packet_queue)<sizeof(PacketDes)){
 
                     av_fifo_grow(filter_graph_des->packet_queue, sizeof(PacketDes)*10);
 
-                  }
-                    PacketDes pkd;
+                  }*/
+                    //PacketDes pkd;
 
-                   pkd.pts=pkt->pts;
-                   pkd.dts=pkt->dts;
-                   pkd.duration=pkt->duration;
+                   //pkd.pts=pkt->pts;
+                   //pkd.dts=pkt->dts;
+                   //pkd.duration=pkt->duration;
 
-                   av_fifo_generic_write(filter_graph_des->packet_queue, &pkd, sizeof(pkd), NULL);
+                   //av_fifo_generic_write(filter_graph_des->packet_queue, &pkd, sizeof(pkd), NULL);
 
-                   av_log(NULL,AV_LOG_DEBUG, "push packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",pkd.pts,pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
+                   //av_log(NULL,AV_LOG_DEBUG, "push packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",pkd.pts,pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
 
                    av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
 

@@ -151,10 +151,10 @@ typedef struct FilterGraph {
     //enum SubtitleType sub_type;
     int subtitle_stream_index;
 
-    AVFifoBuffer *packet_queue;
+    //AVFifoBuffer *packet_queue;
 
-    int64_t encode_delay;
-    int64_t encode_start;
+    //int64_t encode_delay;
+    //int64_t encode_start;
 
     AVCodecContext *subtitle_dec_ctx;
     bool if_hw;
