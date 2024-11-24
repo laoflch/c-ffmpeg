@@ -1612,9 +1612,18 @@ av_frame_unref(frame);
                        //out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
                        //out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
                        //在调整帧率的时候需求调整这个值enc->framerate/dec->framerate，
-                       out_pkt->duration=1;pkt->duration;//out_pkd.duration;
+                       out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
 //av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
 av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+//为了避免encodec后的packet的dts出现与上一帧重复的情况，对于当前帧小于或者等于上一帧,用上一帧加一替代。
+if(output_streams[stream_mapping[pkt->stream_index]]->current_dts>=out_pkt->dts){
+
+  out_pkt->dts=output_streams[stream_mapping[pkt->stream_index]]->current_dts+1;
+
+}
+
+output_streams[stream_mapping[pkt->stream_index]]->current_dts=out_pkt->dts;
+
 
 
                          //out_pkt->pts=av_gettime_relative()-input_streams[pkt->stream_index]->start_time;
@@ -2424,7 +2433,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
 
-               av_dict_set(&output_stream->encoder_opts,"preset","p5",0);
+               av_dict_set(&output_stream->encoder_opts,"preset","p4",0);
 
                //nvenc的preset不宜过低，过低也将出现视频卡顿
 

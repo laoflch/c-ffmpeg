@@ -393,6 +393,8 @@ typedef struct OutputStream {
     int64_t error[4];
 
     AVAudioFifo *audio_fifo;
+
+    int64_t current_dts;
 } OutputStream;
 
 typedef struct Fade2Context {
