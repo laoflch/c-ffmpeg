@@ -468,7 +468,7 @@ if (control->seek_time !=0) {
 }
 
 int handle_sub(AVFrame *frame,AssContext *ass,SubtitleFrame *sub_frame,OverlayContext *overlay_ctx,AVRational time_base){
-     // printf("^^^^^^^^^^^^^^^^^^^^^8 pts:%"PRId64" %f \n",frame->pts,av_q2d(time_base));
+      printf("^^^^^^^^^^^^^^^^^^^^^8 pts:%"PRId64" %f \n",frame->pts,av_q2d(time_base));
 //printf("time_ns:%"PRId64" \n",time_ns);
   if(sub_frame->pts>0){
  int64_t time_ns=av_rescale_q(frame->pts, time_base, AV_TIME_BASE_Q);
@@ -622,20 +622,20 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
 
       int got_frame;
  
-      //printf("dec time base:{%d %d}",sub_condec_ctx->time_base.den,sub_condec_ctx->time_base.num);
+      printf("dec time base:{%d %d}",sub_condec_ctx->time_base.den,sub_condec_ctx->time_base.num);
       int ret = avcodec_decode_subtitle2(sub_condec_ctx, &subtitle,&got_frame,pkt);
       if (ret < 0) {
           fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
           return 1;
       }
-     //printf("got_frame:%d\n",got_frame);
+     printf("got_frame:%d\n",got_frame);
 
     if (ret >= 0&&got_frame>0) {
- //printf("subtitle fromat:%d\n",subtitle.format);
+ printf("subtitle fromat:%d\n",subtitle.format);
       if(subtitle.format==0){
-//printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
- //printf("num_rects:%d\n",subtitle.num_rects);
+ printf("num_rects:%d\n",subtitle.num_rects);
         if(subtitle.num_rects>0){
         for(size_t i=0;i<subtitle.num_rects;i++){
           AVSubtitleRect *sub_rect=subtitle.rects[i];
@@ -653,12 +653,12 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
                     }
 
 
-subtitle_frame->sub_frame->width=sub_rect->w;
+          subtitle_frame->sub_frame->width=sub_rect->w;
           subtitle_frame->sub_frame->height=sub_rect->h;
           subtitle_frame->sub_frame->format=AV_PIX_FMT_YUVA420P;
 
-  ret=av_frame_get_buffer(subtitle_frame->sub_frame, 0);
-  if (ret<0){
+          ret=av_frame_get_buffer(subtitle_frame->sub_frame, 0);
+          if (ret<0){
               printf("Error: fill new logo frame failed:%d \n",ret);
 
           }
@@ -681,7 +681,7 @@ subtitle_frame->sub_frame->width=sub_rect->w;
 
           subtitle_frame->is_display=1;
 
-          //printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+          printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
 
 

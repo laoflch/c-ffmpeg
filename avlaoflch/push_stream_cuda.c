@@ -418,6 +418,9 @@ OutputStream *add_output_stream_cuda(AVFormatContext *oc,  int output_stream_ind
     ost->forced_kf_ref_pts = AV_NOPTS_VALUE;
 
     ost->audio_fifo=NULL;
+    ost->current_dts=-1;
+
+    ost->min_pts_dts=-1;
 
     //if(codec_type== AVMEDIA_TYPE_AUDIO&&if_audio_fifo){
     //ost->audio_fifo=av_mallocz(sizeof(AVAudioFifo *));
@@ -641,8 +644,8 @@ for(int i=0;i<filter_graph_point->nb_filters;i++){
 }
 
 int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRational time_base,bool *if_empty_subtitle){
-
-  if(sub_frame->pts>0){
+printf("sub_frame pts:%"PRId64" \n",sub_frame->pts);
+  if(sub_frame->pts>0||1){
  int64_t time_ns=av_rescale_q((*frame)->pts, time_base, AV_TIME_BASE_Q);
 
 
@@ -650,14 +653,14 @@ int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRation
 
    //double time_ms = frame->pts * av_q2d(time_base) * 1000;
 //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
-//printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
+printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
 //if (frame->pts >= sub_frame->pts && frame->pts <= (sub_frame->pts + sub_frame->duration)) {
 if(sub_frame->is_display&&time_ns>=sub_frame->pts){ 
     //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
     //
-//printf("iiiiiiiiiiiii2 %d %"PRId64" \n",sub_frame->is_display,sub_frame->pts);
-  (*frame)=sub_frame->sub_frame;
 
+  (*frame)=sub_frame->sub_frame;
+printf("iiiiiiiiiiiii2 %d %"PRId64" \n",sub_frame->is_display,sub_frame->pts);
   *if_empty_subtitle=false;
   return 0;
 
@@ -1375,13 +1378,13 @@ if(1){
                     }else if(filter_graph_des->sub_frame){
 
  bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
-                      //printf("ttttttttttttt %d \n",if_empty_subtitle);
+                      printf("ttttttttttttt %d \n",if_empty_subtitle);
                  handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
 
                  if(if_empty_subtitle){
 //printf("iiiiiiiiiiiii3 %d %d \n",sub_frame->is_display,sub_frame->pts);
                  *(filter_graph_des->subtitle_frame)=*(filter_graph_des->subtitle_empty_frame);
-//printf("iiiiiiiiiiiii3 %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
+printf("iiiiiiiiiiiii3 %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
                       }else{
 
                        }
@@ -1418,7 +1421,7 @@ if(1){
   //
 
 //printf("iiiiiiiiiiiii %d %d \n",(*(filter_graph_des->subtitle_frame)),(*(filter_graph_des->subtitle_empty_frame)));
-//printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
+printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
     av_buffersrc_parameters_set(*subtitle_ctx,subtitle_buffersrc_par);
 
                  ret = av_buffersrc_add_frame_flags(*subtitle_ctx, (*(filter_graph_des->subtitle_frame)),AV_BUFFERSRC_FLAG_KEEP_REF);
@@ -1612,6 +1615,16 @@ av_frame_unref(frame);
                        //out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
                        //out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
                        //在调整帧率的时候需求调整这个值enc->framerate/dec->framerate，
+                       //处理encodec后的packet的dts是负数，且远小于pts的情况，如：pts为正数，而dts是-3003的情况
+                       if(out_pkt->dts<0){
+
+                         if(output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts==-1)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;
+
+if(out_pkt->pts-out_pkt->dts<output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;
+
+
+                       }
+                         out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts;
                        out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
 //av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
 av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
@@ -1628,7 +1641,7 @@ output_streams[stream_mapping[pkt->stream_index]]->current_dts=out_pkt->dts;
 
                          //out_pkt->pts=av_gettime_relative()-input_streams[pkt->stream_index]->start_time;
                         //av_log(NULL,AV_LOG_DEBUG, "pull packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",out_pkd.pts,out_pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
-                       printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration,out_pkt->dts%8);
+                       printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
 
                          //out_pkt->dts=out_pkt->pts-av_rescale_q(pkt->duration, output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base, AV_TIME_BASE_Q);//-av_rescale_q(pkt->pts-pkt->dts,(*enc_ctx)->time_base,AV_TIME_BASE_Q);
                                                   //   out_pkt->dts=out_pkt->dts*out_pkt->duration;
@@ -2736,7 +2749,7 @@ log_packet(ifmt_ctx, pkt, "in-2");
 
       //   pkt->pts=pkt->pts-(input_streams[stream_mapping[pkt->stream_index]]->start_pts+av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
       //
-input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration=(pkt->pts-pkt->dts)/pkt->duration;
+//input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration=(pkt->pts-pkt->dts)/pkt->duration;
 //pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
 
 if(pkt->dts==AV_NOPTS_VALUE){
