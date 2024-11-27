@@ -645,12 +645,12 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
           if(subtitle_frame->sub_frame==NULL){
 
 
-         subtitle_frame->sub_frame=av_frame_alloc();
+              subtitle_frame->sub_frame=av_frame_alloc();
 
         
           }else{
-            av_frame_unref(subtitle_frame->sub_frame);
-                    }
+              av_frame_unref(subtitle_frame->sub_frame);
+          }
 
 
           subtitle_frame->sub_frame->width=sub_rect->w;
@@ -704,10 +704,26 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
         } 
       }else if(subtitle.format==1){
         //ass
-        //
+        int64_t start_time,duration; 
 
-  const int64_t start_time = av_rescale_q(subtitle.pts, AV_TIME_BASE_Q, av_make_q(1, 1000));
-                const int64_t duration   = subtitle.end_display_time;
+
+        if(subtitle.pts<=0||subtitle.end_display_time==0){
+
+          //处理decodec后subtitle.pts为负值(说明解码的字幕帧不带时间轴信息),用pkt的pts和duration替换
+
+                start_time=av_rescale_q(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, av_make_q(1, 1000));
+                duration   = av_rescale_q(pkt->duration, fmt_ctx->streams[pkt->stream_index]->time_base, av_make_q(1, 1000)); 
+
+        }else{
+                start_time = av_rescale_q(subtitle.pts, AV_TIME_BASE_Q, av_make_q(1, 1000));
+//const int64_t start_time =pkt->pts;
+                      
+                duration   = subtitle.end_display_time;
+
+        }      
+                printf("2 pts:%"PRId64"  start:%"PRId64" end:%"PRId64"\n",subtitle.pts,start_time,subtitle.end_display_time);
+
+   //const int64_t duration=10000;
                 for (size_t i = 0; i < subtitle.num_rects; i++) {
                     char *ass_line = subtitle.rects[i]->ass;
                     if (!ass_line)

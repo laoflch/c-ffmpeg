@@ -676,15 +676,15 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
     int detect_change = 0;
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
-    //double time_ms=37225;
-  //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
+    //double time_ms=43000;
+  printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
- //printf("*************889 %d \n",ass->renderer);
+ printf("*************8892 %d \n",ass->renderer);
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
 
        if(image){
 
-  //       printf("$$$$$$$$$$$$$$$$$$$$$image \n");
+         printf("$$$$$$$$$$$$$$$$$$$$$image \n");
 
     if (detect_change){
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
@@ -700,9 +700,9 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
        
   //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
     //overlay_ass_image_cuda(ass, *frame, image);
-  //                  printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
+                    printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
 if(!(*if_empty_subtitle) && *frame){
-  //printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
+  printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
 
   av_frame_unref(*frame);
   av_frame_free(frame);
@@ -713,7 +713,7 @@ convert_rgba_to_yuva420p(frame);
    // return ret;
     }
 *if_empty_subtitle=false;
- //printf("*************889 %d %d \n",frame,*frame);
+ printf("*************889 %d %d \n",frame,*frame);
 return 0;
 
     
@@ -793,14 +793,14 @@ image_t *img_empty=gen_image(img->stride,img->h);
 
   ASS_Image *img_tmp=img;
 
-
+ printf("img_tmp size:%d %d \n",img_tmp->stride,img_tmp->h);
    while(img_tmp){
 
      max_stride=FFMAX(max_stride, img_tmp->stride);
      max_height=FFMAX(max_height, img_tmp->h);
 
     img_tmp=img_tmp->next; 
-
+ //printf("next:%d %d \n",img_tmp->stride,img_tmp->h);
    }
  printf("max stride size:%d %d \n",max_stride,max_height);
 
@@ -1378,13 +1378,13 @@ if(1){
                     }else if(filter_graph_des->sub_frame){
 
  bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
-                      printf("ttttttttttttt %d \n",if_empty_subtitle);
+                      //printf("ttttttttttttt %d \n",if_empty_subtitle);
                  handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
 
                  if(if_empty_subtitle){
 //printf("iiiiiiiiiiiii3 %d %d \n",sub_frame->is_display,sub_frame->pts);
                  *(filter_graph_des->subtitle_frame)=*(filter_graph_des->subtitle_empty_frame);
-printf("iiiiiiiiiiiii3 %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
+//printf("iiiiiiiiiiiii3 %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
                       }else{
 
                        }
@@ -1421,7 +1421,7 @@ printf("iiiiiiiiiiiii3 %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*
   //
 
 //printf("iiiiiiiiiiiii %d %d \n",(*(filter_graph_des->subtitle_frame)),(*(filter_graph_des->subtitle_empty_frame)));
-printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
+//printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
     av_buffersrc_parameters_set(*subtitle_ctx,subtitle_buffersrc_par);
 
                  ret = av_buffersrc_add_frame_flags(*subtitle_ctx, (*(filter_graph_des->subtitle_frame)),AV_BUFFERSRC_FLAG_KEEP_REF);
@@ -1608,14 +1608,23 @@ av_frame_unref(frame);
                        }*/
 
                        //printf("encode_delay:%"PRId64" \n",filter_graph_des->encode_delay);
-//直接使用编码后out_pkt的pts和dts,省去处理b帧和I帧及顺序问题
 //av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,AV_TIME_BASE_Q);
                        //PacketDes out_pkd;
                        //av_fifo_generic_read(filter_graph_des->packet_queue, &out_pkd, sizeof(out_pkd), NULL);
                        //out_pkt->pts=out_pkd.pts+filter_graph_des->encode_delay;
                        //out_pkt->dts=out_pkd.dts+filter_graph_des->encode_delay;
-                       //在调整帧率的时候需求调整这个值enc->framerate/dec->framerate，
-                       //处理encodec后的packet的dts是负数，且远小于pts的情况，如：pts为正数，而dts是-3003的情况
+                      //在调整帧率的时候需求调整这个值enc->framerate/dec->framerate，
+  
+ 
+/**
+ *
+ *在使用hevc_nvenc编码时，直接使用encodec后out_pkt的pts和dts,省去处理b帧和I帧及顺序问题,不会出现视频卡顿问题.
+ *
+ *
+ */ 
+ 
+ 
+                      //处理encodec后的packet的dts是负数，且远小于pts的情况，如：pts为正数，而dts是-3003的情况
                        if(out_pkt->dts<0){
 
                          if(output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts==-1)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;

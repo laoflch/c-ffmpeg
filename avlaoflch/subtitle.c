@@ -220,7 +220,7 @@ void blend(image_t * frame, ASS_Image *img)
     int cnt = 0;
     ASS_Image *new_img=img;
     while (new_img) {
-        //blend_single2(frame, new_img);
+        blend_single2(frame, new_img);
         ++cnt;
 
         //old_img=img;
