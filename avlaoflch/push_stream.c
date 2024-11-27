@@ -622,7 +622,7 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
 
       int got_frame;
  
-      printf("dec time base:{%d %d}",sub_condec_ctx->time_base.den,sub_condec_ctx->time_base.num);
+      //printf("dec time base:{%d %d}",sub_condec_ctx->time_base.den,sub_condec_ctx->time_base.num);
       int ret = avcodec_decode_subtitle2(sub_condec_ctx, &subtitle,&got_frame,pkt);
       if (ret < 0) {
           fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
@@ -631,11 +631,11 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
      printf("got_frame:%d\n",got_frame);
 
     if (ret >= 0&&got_frame>0) {
- printf("subtitle fromat:%d\n",subtitle.format);
+ //printf("subtitle fromat:%d\n",subtitle.format);
       if(subtitle.format==0){
-printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+//printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
- printf("num_rects:%d\n",subtitle.num_rects);
+ //printf("num_rects:%d\n",subtitle.num_rects);
         if(subtitle.num_rects>0){
         for(size_t i=0;i<subtitle.num_rects;i++){
           AVSubtitleRect *sub_rect=subtitle.rects[i];
@@ -681,7 +681,7 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
 
           subtitle_frame->is_display=1;
 
-          printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+          //printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
 
 
@@ -721,7 +721,7 @@ printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subti
                 duration   = subtitle.end_display_time;
 
         }      
-                printf("2 pts:%"PRId64"  start:%"PRId64" end:%"PRId64"\n",subtitle.pts,start_time,subtitle.end_display_time);
+                //printf("2 pts:%"PRId64"  start:%"PRId64" end:%"PRId64"\n",subtitle.pts,start_time,subtitle.end_display_time);
 
    //const int64_t duration=10000;
                 for (size_t i = 0; i < subtitle.num_rects; i++) {

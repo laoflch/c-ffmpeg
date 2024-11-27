@@ -653,14 +653,14 @@ printf("sub_frame pts:%"PRId64" \n",sub_frame->pts);
 
    //double time_ms = frame->pts * av_q2d(time_base) * 1000;
 //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
-printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
+//printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
 //if (frame->pts >= sub_frame->pts && frame->pts <= (sub_frame->pts + sub_frame->duration)) {
 if(sub_frame->is_display&&time_ns>=sub_frame->pts){ 
     //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
     //
 
   (*frame)=sub_frame->sub_frame;
-printf("iiiiiiiiiiiii2 %d %"PRId64" \n",sub_frame->is_display,sub_frame->pts);
+//printf("iiiiiiiiiiiii2 %d %"PRId64" \n",sub_frame->is_display,sub_frame->pts);
   *if_empty_subtitle=false;
   return 0;
 
@@ -677,14 +677,14 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
     //double time_ms=43000;
-  printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
+  //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
- printf("*************8892 %d \n",ass->renderer);
+ //printf("*************8892 %d \n",ass->renderer);
     ASS_Image *image = ass_render_frame(ass->renderer, ass->track, time_ms, &detect_change);
 
        if(image){
 
-         printf("$$$$$$$$$$$$$$$$$$$$$image \n");
+         //printf("$$$$$$$$$$$$$$$$$$$$$image \n");
 
     if (detect_change){
         av_log(NULL, AV_LOG_DEBUG, "Change happened at time ms:%f\n", time_ms);
@@ -700,9 +700,9 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
        
   //printf("subtitle x:%d y:%d\n",*frame,image->dst_y);
     //overlay_ass_image_cuda(ass, *frame, image);
-                    printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
+                    //printf("uuuuuuuuuuuuuuuuuuuuuuuuu %d %d \n",*frame, frame);
 if(!(*if_empty_subtitle) && *frame){
-  printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
+  //printf("uuuuuuuuuuuuuuuuuuuuuuuuu2 %d %d \n",*frame, frame);
 
   av_frame_unref(*frame);
   av_frame_free(frame);
@@ -713,7 +713,7 @@ convert_rgba_to_yuva420p(frame);
    // return ret;
     }
 *if_empty_subtitle=false;
- printf("*************889 %d %d \n",frame,*frame);
+ //printf("*************889 %d %d \n",frame,*frame);
 return 0;
 
     
