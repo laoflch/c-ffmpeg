@@ -296,7 +296,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         if(hw&&par->codec_type==AVMEDIA_TYPE_VIDEO){ 
             ist->dec_ctx->get_format  = get_hw_format;
 
-AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
+               AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
 
 //              AVBufferRef *hwdevice;
 
@@ -307,7 +307,7 @@ AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
                av_hwdevice_ctx_create(hwdevice, type, NULL, NULL, 0);
 
              
- printf("hwframe_ctx_init %d\n ",2);
+ //printf("hwframe_ctx_init %d\n ",2);
             if (hw_decoder_init(ist->dec_ctx, type,hw_device_ctx) < 0)
             return ;
             av_buffer_unref(hwdevice);
@@ -1006,7 +1006,7 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
            AVRational logo_fr = {0};
 
            AVFrame *logo_frame;//,*subtitle_empty_frame; 
-AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
+           AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
            //const AVFilter *abuffersrc  = avfilter_get_by_name("hwupload_cuda");
 
            logo_frame=*(filter_graph_des->logo_frame);
@@ -1073,7 +1073,7 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
                                "[main_logo][subtitle]overlay_cuda=x=(W-w)/2:y=H-h-%d[result];"
 
                                //"[result]format=p010[result_2];" 
-                               "[result]scale_cuda=format=p010[result_2];"
+                               "[result]scale_cuda=format=yuv420p[result_2];"
                                "[result_2]buffersink",
                                dec_ctx->width, dec_ctx->height, frame->format, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den,  (*enc_ctx)->width,(*enc_ctx)->height,
                                logo_frame->width,logo_frame->height,AV_PIX_FMT_RGBA,tb.num,tb.den,sar.num, sar.den,fr.num,fr.den,
@@ -1100,11 +1100,14 @@ AVBufferSrcParameters *main_buffersrc_par,*subtitle_buffersrc_par;
 
 }
  */          
-  main_buffersrc_par=av_buffersrc_parameters_alloc();
-  memset(main_buffersrc_par,0,sizeof(*main_buffersrc_par));
+              main_buffersrc_par=av_buffersrc_parameters_alloc();
+              memset(main_buffersrc_par,0,sizeof(*main_buffersrc_par));
 
-main_buffersrc_par->format=AV_PIX_FMT_CUDA;
-main_buffersrc_par->hw_frames_ctx=av_buffer_ref(frame->hw_frames_ctx);
+              main_buffersrc_par->format=AV_PIX_FMT_CUDA;
+              main_buffersrc_par->hw_frames_ctx=av_buffer_ref(frame->hw_frames_ctx);
+
+
+              filter_graph_des->main_src_hw_frames_ctx=&main_buffersrc_par->hw_frames_ctx;
 
 //(*enc_ctx)->hw_device_ctx->data;
   //根据 名字 找到 AVFilterContext
@@ -2388,7 +2391,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
               if(if_hw){
               //硬件加速    
                   enc_ctx->pix_fmt=AV_PIX_FMT_CUDA;
-                  enc_ctx->sw_pix_fmt=AV_PIX_FMT_P010LE;
+                  //enc_ctx->sw_pix_fmt=AV_PIX_FMT_P010LE;
+                  enc_ctx->sw_pix_fmt=AV_PIX_FMT_YUV420P;
 
               /* set hw_frames_ctx for encoder's AVCodecContext 
                * 设置编码Context的hwframe context
@@ -2901,10 +2905,10 @@ end:
     if(sub_frame)
        free_subtitle_frame(sub_frame);
     
-  av_log(NULL,AV_LOG_INFO,"free sub_frame: \n");
+    av_log(NULL,AV_LOG_INFO,"free sub_frame: \n");
     avformat_close_input(&ifmt_ctx);
     avformat_free_context(ifmt_ctx);
- av_log(NULL,AV_LOG_INFO,"free ifmt_ctx: \n");
+    av_log(NULL,AV_LOG_INFO,"free ifmt_ctx: \n");
 
     /* close output */
     if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
@@ -2913,36 +2917,55 @@ end:
   
 
     avformat_free_context(ofmt_ctx);
-av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
+    av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
  
     av_packet_free(&pkt);
     av_packet_free(&out_pkt);
+    av_log(NULL,AV_LOG_INFO,"free pkt & out_pkt: \n");
+
+    av_buffer_unref(hw_device_ctx);
+
+    av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
+
+
+    //av_buffer_unref();
 
     //释放输入流的解码AVCodec_Context
- av_log(NULL,AV_LOG_INFO,"free pkt & out_pkt: \n");
-
-    av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
+   
+       av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
     for(int i=0;i<nb_input_streams;i++){
 
-        //av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
+       
+        av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
+
+        
+
+        av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
+
         //avcodec_close(input_streams[i]->dec_ctx);
- av_log(NULL,AV_LOG_INFO,"free dec_ctx num:%d \n",i);
+        av_log(NULL,AV_LOG_INFO,"free dec_ctx num:%d \n",i);
 
         avcodec_free_context(&input_streams[i]->dec_ctx);
 
     }
-   av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
-   
+    av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
+
     //释放输出流的编码AVCodec_Context
     for(int i=0;i<nb_output_streams;i++){
-        //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
+
+        if(&output_streams[i]->enc_ctx->hw_frames_ctx){
+
+            //先释放CUDA的hw_frames_ctx
+            av_log(NULL,AV_LOG_INFO,"free enc_ctx hw_frames_ctx num:%d \n",i);
+            av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
+        }
         //avcodec_close(output_streams[i]->enc_ctx);
         //
         //avcodec_close(output_streams[i]->enc_ctx);
         //
         //
         //output_streams[i]->enc_ctx->hw_device_ctx=NULL;
-        //av_buffer_unref(output_streams[i]->enc_ctx->hw_device_ctx);
+        av_buffer_unref(&output_streams[i]->enc_ctx->hw_device_ctx);
         av_log(NULL,AV_LOG_INFO,"free enc_ctx num:%d \n",i);
         avcodec_free_context(&output_streams[i]->enc_ctx);
 
@@ -2950,9 +2973,7 @@ av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
  
    
 
-    av_buffer_unref(hw_device_ctx);
-
-     av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
+    
     if(ret!=AVERROR(ECONNREFUSED)){
 
         avfilter_free(*mainsrc_ctx);
@@ -2964,25 +2985,32 @@ av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
        
     }
 
-      av_log(NULL,AV_LOG_INFO,"free mainsrc_ctx & logo_ctx & subtitle_ctx & resultsink_ctx \n");
+    av_log(NULL,AV_LOG_INFO,"free mainsrc_ctx & logo_ctx & subtitle_ctx & resultsink_ctx \n");
 
 
     //释放滤镜
     //
+    //for(int i=0;i<(*filter_graph)->nb_filters;i++){
+//av_buffer_unref(&(*filter_graph)-filters[i]->hw_device_ctx);
+        //(*filter_graph)->filters[i]->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
+
+//}
+    av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
+    av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
     //if(filter_graph){
     avfilter_graph_free(filter_graph);
 
 
     //}
-  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
+    av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
     //if(afilter_graph)
     avfilter_free(*abuffersrc_ctx);
-  av_log(NULL,AV_LOG_INFO,"free abuffersrc_ctx \n");
+    av_log(NULL,AV_LOG_INFO,"free abuffersrc_ctx \n");
     avfilter_free(*abuffersink_ctx);
-  av_log(NULL,AV_LOG_INFO,"free abuffersink_ctx \n");
+    av_log(NULL,AV_LOG_INFO,"free abuffersink_ctx \n");
 
     avfilter_graph_free(afilter_graph);
-  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
+    av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
     if(filter_graph_des->ass) 
         av_free(filter_graph_des->ass);
     
@@ -2993,7 +3021,7 @@ av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
         av_free(filter_graph_des->subtitle_path);
     if(filter_graph_des)
         av_free(filter_graph_des);
-  av_log(NULL,AV_LOG_INFO,"free filter_graph_des \n");
+    av_log(NULL,AV_LOG_INFO,"free filter_graph_des \n");
     //av_freep只能用于指向指针的指针,因为还需要对指针赋NULL，否则找不到地址
 
     av_freep(input_streams);
@@ -3306,9 +3334,9 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
 //AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/home/laoflch/Documents/laoflch-mc-log22.png",&logo_tb,&logo_fr);
 
     TaskHandleProcessInfo *info=task_handle_process_info_alloc();
-    info->video_codec_id=AV_CODEC_ID_HEVC;
-    //info->height=1040;
-    //info->width=1920;
+    info->video_codec_id=AV_CODEC_ID_H264;
+    info->height=1080;
+    info->width=1920;
     //info->bit_rate= 10000000;
     //info->bit_rate= -1;
     //

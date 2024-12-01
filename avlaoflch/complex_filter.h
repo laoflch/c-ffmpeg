@@ -138,6 +138,7 @@ typedef struct FilterGraph {
     AVFrame **logo_frame;
     AVFrame **subtitle_frame;
     AVFrame **subtitle_empty_frame;
+    AVBufferRef **main_src_hw_frames_ctx;
 
     AVFilterGraph *graph;
     int reconfiguration;
