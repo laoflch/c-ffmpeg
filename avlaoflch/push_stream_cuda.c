@@ -1331,7 +1331,8 @@ if(1){
                     //if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
                     if (filter_graph_des->ass!=NULL){
                         //frame->pts=s_frame_pts;//+av_rescale_q(fmt_ctx->start_time,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base);
-                        printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
+                        //printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*AV_TIME_BASE,AV_TIME_BASE_Q,fmt_ctx->streams[pkt->stream_index]->time_base)));
+                        printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base)));
                        //
              
                        //AVFrame **subtitle_frame=(AVFrame **)av_malloc(sizeof(AVFrame **));
@@ -1343,13 +1344,16 @@ if(1){
                         }else if (filter_graph_des->subtitle_time_offset<0){
                             frame->pts=s_frame_pts-av_rescale_q(-filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
 
-                        }else {
-                            frame->pts=s_frame_pts;
+                        }//else {
+                          //  frame->pts=s_frame_pts;
 
-                        }
+                        //}
 
                        handle_subtitle2image(filter_graph_des->subtitle_frame,frame->pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
-  printf("set empty %d \n",*(filter_graph_des->subtitle_frame)) ;
+                       frame->pts=s_frame_pts;
+
+
+  //printf("set empty %d \n",*(filter_graph_des->subtitle_frame)) ;
                        if(if_empty_subtitle){
 
                        
@@ -1394,7 +1398,7 @@ if(1){
 
 
                     } 
-(*(filter_graph_des->subtitle_frame))->pts=s_frame_pts;
+               (*(filter_graph_des->subtitle_frame))->pts=s_frame_pts;
 //int64_t subtitle_empty_frame_pts=0;
                        /* if(filter_graph_des->subtitle_time_offset>0){ 
                             subtitle_empty_frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
@@ -1414,7 +1418,7 @@ if(1){
     //            subtitle_buffersrc_par->height=50;
  //              }else{
 //printf("subtitle2 x:%d y:%d\n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
- subtitle_buffersrc_par=av_buffersrc_parameters_alloc();
+                subtitle_buffersrc_par=av_buffersrc_parameters_alloc();
     //memset(subtitle_buffersrc_par,0,sizeof(*subtitle_buffersrc_par));
                 subtitle_buffersrc_par->width=(*(filter_graph_des->subtitle_frame))->width;
                 subtitle_buffersrc_par->height=(*(filter_graph_des->subtitle_frame))->height;
@@ -1425,7 +1429,7 @@ if(1){
 
 //printf("iiiiiiiiiiiii %d %d \n",(*(filter_graph_des->subtitle_frame)),(*(filter_graph_des->subtitle_empty_frame)));
 //printf("b add %d %d \n",(*(filter_graph_des->subtitle_frame))->width,(*(filter_graph_des->subtitle_frame))->height);
-    av_buffersrc_parameters_set(*subtitle_ctx,subtitle_buffersrc_par);
+                 av_buffersrc_parameters_set(*subtitle_ctx,subtitle_buffersrc_par);
 
                  ret = av_buffersrc_add_frame_flags(*subtitle_ctx, (*(filter_graph_des->subtitle_frame)),AV_BUFFERSRC_FLAG_KEEP_REF);
 
@@ -1444,15 +1448,15 @@ if(1){
                      //av_frame_unref(sw_frame);
                      return ret;
                  }
-//if(if_empty_subtitle){
-                  //av_frame_unref((*subtitle_frame));
-                  //   av_frame_free(subtitle_frame);
-                  //
-                  //
+printf("add subtile frame pts:%d %d \n", *(filter_graph_des->subtitle_frame),*(filter_graph_des->subtitle_empty_frame));
+                 /*if(*(filter_graph_des->subtitle_frame)!=*(filter_graph_des->subtitle_empty_frame)){
+printf("free frame pts:%s %s \n", av_ts2str((*(filter_graph_des->subtitle_frame))->pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base)));
+                     av_frame_unref(*(filter_graph_des->subtitle_frame));
+                     //av_frame_free(filter_graph_des->subtitle_frame);
  //                 *(filter_graph_des->subtitle_frame)=NULL;
 
-//}
-
+                 }
+*/
                  //new_logo_frame->pts=s_pts;
                  ret = av_buffersrc_add_frame(*logo_ctx, new_logo_frame);
 
@@ -1481,6 +1485,8 @@ if(1){
   
                        }*/
                 //处理主流
+                 //frame->pts=s_frame_pts;
+
                  ret = av_buffersrc_add_frame_flags(*mainsrc_ctx, frame,AV_BUFFERSRC_FLAG_PUSH);
 
                  if(ret < 0){
@@ -3341,8 +3347,8 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->bit_rate= -1;
     //
     //info->audio_channels=6;
-    //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
-    //info->control->subtitle_time_offset=2000;
+    //info->control=av_mallocz(sizeof(TaskHandleProcessControl));
+    //info->control->subtitle_time_offset=-10000;
     //info->control->subtitle_charenc="UTF-8";
 printf("##################1 %s \n",subtitle_filename);
     //info->control->seek_time=300;
