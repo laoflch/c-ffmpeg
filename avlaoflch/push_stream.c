@@ -425,8 +425,8 @@ int handle_seek(AVFormatContext *fmt_ctx,TaskHandleProcessControl *control){
 
   if(fmt_ctx){
 if (control->seek_time !=0) {
-        int64_t seek_timestamp = control->current_seek_pos_time+control->seek_time*AV_TIME_BASE+fmt_ctx->start_time;
-
+        int64_t seek_timestamp = control->current_seek_pos_time+control->seek_time*AV_TIME_BASE;//+fmt_ctx->start_time;
+//int64_t seek_timestamp = control->seek_time*AV_TIME_BASE;
         if (!(fmt_ctx->iformat->flags & AVFMT_SEEK_TO_PTS)) {
             int dts_heuristic = 0;
             for (int i=0; i<fmt_ctx->nb_streams; i++) {
@@ -437,6 +437,7 @@ if (control->seek_time !=0) {
                 }
             }
             if (dts_heuristic) {
+printf("##################2 %"PRId64" \n",seek_timestamp);
                 seek_timestamp -= 3*AV_TIME_BASE / 23;
             }
         }
@@ -447,9 +448,9 @@ if (control->seek_time !=0) {
     int64_t seek_max=seek_timestamp;
 
     //int flags=AVSEEK_FLAG_FRAME;
-//printf("################## %"PRId64" \n",seek_target);
+printf("################## %"PRId64" \n",seek_target);
     int ret=avformat_seek_file(fmt_ctx, -1, seek_min, seek_target,seek_max, 0);
-//printf("################## %"PRId64" \n",seek_target);
+printf("################## %"PRId64" \n",seek_target);
     if(ret<0){
 
       av_log(NULL,AV_LOG_WARNING,"%s:error while seeking\n ",fmt_ctx->url);
@@ -549,7 +550,7 @@ int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *f
 //printf("out pts: %"PRId64" \n", pkt->pts); 
  //pkt->stream_index = stream_mapping[pkt->stream_index];
        // out_stream = ofmt_ctx->streams[pkt->stream_index];
-        //InputStream *ist = input_streams[stream_mapping[pkt->stream_index]];
+        InputStream *ist = input_streams[stream_mapping[pkt->stream_index]];
 
         out_pkt->stream_index=stream_mapping[pkt->stream_index];
  out_stream = ofmt_ctx->streams[out_pkt->stream_index];
@@ -565,7 +566,12 @@ int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *f
 
 //}
 
+        /*if(ist->seek_offset!=0){
 
+          out_pkt->pts=out_pkt->pts+av_rescale_q(ist->seek_offset*AV_TIME_BASE, AV_TIME_BASE_Q, out_stream->time_base);
+          out_pkt->dts=out_pkt->dts+av_rescale_q(ist->seek_offset*AV_TIME_BASE, AV_TIME_BASE_Q, out_stream->time_base);
+
+        }*/
 //printf("################################4\n");
         //out_pkt->pos=origin_pos;
          //printf("########77777########%d %d\n",out_pkt->stream_index,stream_mapping[out_pkt->stream_index]);
@@ -577,7 +583,7 @@ int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *f
         //out_pkt-
 //printf("2origign_pts:%"PRId64" origign_dts:%"PRId64" origign_duration:%"PRId64" pkt->stream_index: %d out_pkt->stream_index: %d \n",out_pkt->pts,out_pkt->dts,out_pkt->duration,pkt->stream_index,ofmt_ctx->streams[0]);
         //out_pkt->dts=out_pkt->pts-(pkt->pts-pkt->dts);
-         log_packet(ofmt_ctx, out_pkt, "out");
+         log_packet2(ofmt_ctx, out_pkt, "out",ist->start);
 
         ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
         if (ret < 0) {
@@ -631,11 +637,11 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
      printf("got_frame:%d\n",got_frame);
 
     if (ret >= 0&&got_frame>0) {
- //printf("subtitle fromat:%d\n",subtitle.format);
+ printf("subtitle fromat:%d\n",subtitle.format);
       if(subtitle.format==0){
 //printf("1 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
- //printf("num_rects:%d\n",subtitle.num_rects);
+ printf("num_rects:%d\n",subtitle.num_rects);
         if(subtitle.num_rects>0){
         for(size_t i=0;i<subtitle.num_rects;i++){
           AVSubtitleRect *sub_rect=subtitle.rects[i];
@@ -681,7 +687,7 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
 
           subtitle_frame->is_display=1;
 
-          //printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
+          printf("2 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
 
 

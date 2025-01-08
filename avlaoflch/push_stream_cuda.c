@@ -198,6 +198,8 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         ist->start=av_gettime_relative();
         ist->start_time=av_gettime_relative();
 
+        ist->seek_offset=0;
+
         //}
         //
         if(ic->start_time>0){
@@ -324,11 +326,11 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         //printf("AVdecodecctx time_base:{%d %d} \n",ist->dec_ctx->time_base.den,ist->dec_ctx->time_base.num);
           if (par->codec_type== AVMEDIA_TYPE_VIDEO||par->codec_type== AVMEDIA_TYPE_AUDIO){
 
-   ist->dec_ctx->thread_count=10;
+   ist->dec_ctx->thread_count=20;
    //av_log(ist->dec_ctx, AV_LOG_INFO, "codec capabilities:%d",ist->dec_ctx->codec->capabilities);
-            ist->dec_ctx->active_thread_type=FF_THREAD_SLICE;
+            ist->dec_ctx->thread_type=FF_THREAD_FRAME;
 //if(!av_dict_get(ist->decoder_opts,"threads",NULL,0))
-   av_dict_set(&ist->decoder_opts,"threads","10",0);
+   av_dict_set(&ist->decoder_opts,"threads","20",0);
           }
 
         if(par->codec_type==AVMEDIA_TYPE_VIDEO){
@@ -487,11 +489,14 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
     //printf("sample_fmt:%d par sample_fmt:%d\n",ost->enc_ctx->sample_fmt,par->format);
     if (codec_type== AVMEDIA_TYPE_VIDEO||codec_type== AVMEDIA_TYPE_AUDIO){
     //    ost->enc = avcodec_find_encoder_by_name("h264_nvenc");
-       ost->enc_ctx->thread_count=10;
+       ost->enc_ctx->thread_count=20;
+
+       //线程数可以设置成core数的两倍,提升线程并发度才能保证高质量的音频转换速度，降低音频编码延迟
+       //ost->enc_ctx->
    //av_log(ost->enc_ctx, AV_LOG_INFO, "codec capabilities:%d",ost->enc_ctx->codec->capabilities);
-       ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
+       ost->enc_ctx->thread_type=FF_THREAD_FRAME;
 //if(!av_dict_get(ost->encoder_opts,"threads",NULL,0))
-   av_dict_set(&(ost->encoder_opts),"threads","10",0);
+   av_dict_set(&(ost->encoder_opts),"threads","20",0);
     }
 //printf("**********************************88 %d \n",ost);
 
@@ -644,7 +649,7 @@ for(int i=0;i<filter_graph_point->nb_filters;i++){
 }
 
 int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRational time_base,bool *if_empty_subtitle){
-printf("sub_frame pts:%"PRId64" \n",sub_frame->pts);
+printf("sub_frame pts:%"PRId64" %"PRId64"\n",sub_frame->pts,(*frame)->pts);
   if(sub_frame->pts>0||1){
  int64_t time_ns=av_rescale_q((*frame)->pts, time_base, AV_TIME_BASE_Q);
 
@@ -652,10 +657,10 @@ printf("sub_frame pts:%"PRId64" \n",sub_frame->pts);
  //   return 0;
 
    //double time_ms = frame->pts * av_q2d(time_base) * 1000;
-//printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
-//printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
+printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
+printf("iiiiiiiiiiiii %d %d \n",sub_frame->is_display);
 //if (frame->pts >= sub_frame->pts && frame->pts <= (sub_frame->pts + sub_frame->duration)) {
-if(sub_frame->is_display&&time_ns>=sub_frame->pts){ 
+if(sub_frame->is_display&&time_ns>=sub_frame->pts&&sub_frame->sub_frame){ 
     //printf("time_ns:%"PRId64" sub_frame pts:%"PRId64" \n",time_ns,sub_frame->pts);
     //
 
@@ -676,7 +681,7 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
     int detect_change = 0;
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
-    //double time_ms=43000;
+    //double time_ms=26000;
   //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
  //printf("*************8892 %d \n",ass->renderer);
@@ -789,41 +794,254 @@ image_t *img_empty=gen_image(img->stride,img->h);
     }
     if(img)free(img);*/
 
-  int max_stride,max_height=0;
+                //int max_stride,max_height=0;
 
-  ASS_Image *img_tmp=img;
+                ASS_Image *img_tmp=img;
 
  printf("img_tmp size:%d %d \n",img_tmp->stride,img_tmp->h);
-   while(img_tmp){
+                //while(img_tmp){
 
-     max_stride=FFMAX(max_stride, img_tmp->stride);
-     max_height=FFMAX(max_height, img_tmp->h);
+                 //   max_stride=FFMAX(max_stride, img_tmp->stride);
+                  //  max_height=FFMAX(max_height, img_tmp->h);
 
-    img_tmp=img_tmp->next; 
+                   // img_tmp=img_tmp->next; 
  //printf("next:%d %d \n",img_tmp->stride,img_tmp->h);
-   }
- printf("max stride size:%d %d \n",max_stride,max_height);
+                //}
+// printf("max stride size:%d %d \n",max_stride,max_height);
 
-image_t *img_empty=gen_image(max_stride,max_height);
+                image_t **img_empty=(image_t **)malloc(sizeof(image_t **));
 
-tmp_frame=av_frame_alloc();
-                tmp_frame->width=img_empty->width;
-                tmp_frame->height=img_empty->height;
+                //image_t *img_empty=gen_image(max_stride,max_height);
+                int min_pos_y=get_all_img_size(img_empty,img);
+                tmp_frame=av_frame_alloc();
+                tmp_frame->width=(*img_empty)->width;
+                tmp_frame->height=(*img_empty)->height;
                 //tmp_frame->format=logo_frame->format;
                 tmp_frame->format=AV_PIX_FMT_RGBA;
-blend(img_empty, img);
-                int ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,img_empty->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
- //printf("stride size:%d %d \n",tmp_frame->linesize[0],img->stride);
+//printf("img_empty  add:%d %d  \n", (*img_empty)->buffer,(*img_empty)->stride);
+
+                blend_pos(img_empty, img,min_pos_y);
+                
+                
+
+
+                int ret=av_image_fill_arrays(tmp_frame->data,tmp_frame->linesize,(*img_empty)->buffer,tmp_frame->format,tmp_frame->width,tmp_frame->height,1);
+ printf("stride size:%d %d \n",tmp_frame->linesize[0],img->stride);
          //free(img_empty->buffer);
-         free(img_empty);
+                free(*img_empty);
+                free(img_empty);
                  //free(img);
 
 
 
-    *frame=tmp_frame;
+                *frame=tmp_frame;
     //printf("%d images blended\n", cnt);
 
-    return 0;
+                return 0;
+}
+
+
+int push_unencode_packet(AVPacket *pkt,InputStream *ist){
+
+      if(!ist->unencode_packet_queue){
+
+          ist->unencode_packet_queue=av_fifo_alloc(sizeof(PacketDes)*10);
+
+       }
+
+       if(av_fifo_space(ist->unencode_packet_queue)<sizeof(PacketDes)){
+
+                    av_fifo_grow(ist->unencode_packet_queue, sizeof(PacketDes)*10);
+
+        }
+                    PacketDes pkd;
+
+                   pkd.pts=pkt->pts;
+                   pkd.dts=pkt->dts;
+                   pkd.duration=pkt->duration;
+
+                   av_fifo_generic_write(ist->unencode_packet_queue, &pkd, sizeof(pkd), NULL);
+
+                   av_log(NULL,AV_LOG_DEBUG, "push packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",pkd.pts,pkd.dts,av_fifo_size(ist->unencode_packet_queue)/sizeof(PacketDes),av_fifo_space(ist->unencode_packet_queue)/sizeof(PacketDes));
+
+
+
+}
+
+
+PacketDes* get_unencode_packet_pts(InputStream *ist){
+
+     PacketDes *pkd=av_mallocz(sizeof(PacketDes));
+     av_fifo_generic_read(ist->unencode_packet_queue, pkd, sizeof(pkd), NULL);
+ av_log(NULL,AV_LOG_DEBUG, "pull packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",pkd->pts,pkd->dts,av_fifo_size(ist->unencode_packet_queue)/sizeof(PacketDes),av_fifo_space(ist->unencode_packet_queue)/sizeof(PacketDes));
+
+
+     return pkd;
+
+
+}
+
+
+/*  only_dec_enc_native_cuda_video_codec_func
+ *  * 支持ass,srt和位图字幕 
+ *
+ * AVPacket *pkt,
+ * AVPacket *out_pkt,
+ * AVFrame *frame,
+ * AVCodecContext *dec_ctx,
+ * AVCodecContext **enc_ctx,
+ * AVFormatContext *fmt_ctx,
+ * AVFormatContext *ofmt_ctx,
+ * int out_stream_index,
+ * int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *,OutputStream **),
+ * int *stream_mapping,
+ * AVFilterGraph **filter_graph,
+ * AVFilterContext **mainsrc_ctx,
+ * AVFilterContext **subtitle_ctx,
+ * AVFilterContext **logo_ctx,
+ * AVFilterContext **resultsink_ctx,
+ * FilterGraph *filter_graph_des,
+ * OutputStream **output_streams  
+ *
+ * 
+ **/
+
+int only_dec_enc_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **subtitle_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
+    if(pkt!=NULL){
+  //      AVFrame *sw_frame =NULL, *hw_frame=NULL; //;
+        int ret,s_pts,frame_key,frame_pict_type;
+        int64_t s_frame_pts,s_pkt_duration;
+
+      
+
+        ret = avcodec_send_packet(dec_ctx, pkt);
+  //av_packet_unref(pkt);/
+        int64_t count=0;
+        if (ret < 0) {
+            fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
+            return 1;
+        } 
+        //push_unencode_packet(pkt, input_streams[pkt->stream_index]);
+        while (ret >= 0) {
+            ret = avcodec_receive_frame(dec_ctx, frame);
+ //printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration:%d base_time:{%d %d} \n",frame->pts,av_rescale_q(pkt->pts-pkt->dts, (*enc_ctx)->time_base, input_streams[0]->st->time_base),pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
+ printf("dec_frame_video:pkt_pts:%"PRId64" pkt_dts:%"PRId64" duration:%d base_time:{%d %d} frame_pts:%"PRId64"  pic_type:%f frame_rate:%d \n",pkt->pts,pkt->dts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,frame->pts,av_q2d(dec_ctx->framerate));
+//printf("dec_frame:pts:%"PRId64" dts:%"PRId64" base_time:{%d %d} \n",frame->pts,pkt->pts-pkt->dts,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
+            if (ret == AVERROR(EAGAIN)) {
+        
+                av_frame_unref(frame);
+                av_packet_unref(pkt);
+                printf("1 \n");
+                              return ret;
+
+            }else if( ret == AVERROR_EOF){
+ printf("2 \n");
+                return 0;
+            }else if (ret < 0) {
+                av_log(NULL, "Error during decoding %d \n ",ret);
+                av_frame_unref(frame);
+ printf("3 \n");
+                return 1 ;
+            }
+
+frame->pict_type=AV_PICTURE_TYPE_NONE;
+                   
+                int ret_enc;
+             
+         
+                   ret_enc = avcodec_send_frame(*enc_ctx, frame);
+av_frame_unref(frame);
+             //   } 
+                if (ret_enc < 0) {
+                    av_frame_unref(frame);
+                    //av_frame_unref(sw_frame);
+                    //av_frame_free(&sw_frame);
+                    av_log(NULL,AV_LOG_ERROR, "Error sending a frame for encoding %d \n",ret_enc);
+                    continue;
+                }
+               
+
+
+                while (ret_enc >= 0) {
+                     ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
+
+                     if (ret_enc == AVERROR(EAGAIN)) {
+
+                         av_frame_unref(frame);
+                         if (filter_graph_des->if_hw){
+                 //            av_frame_free(&sw_frame);
+                         } 
+                         break;
+
+                     } else if( ret_enc == AVERROR_EOF){
+                  //       av_frame_unref(sw_frame);
+                   //      av_frame_free(&sw_frame);
+                         break;
+                     } else if (ret_enc < 0) {
+                         av_frame_unref(frame);
+                    //     av_frame_free(&sw_frame);
+                         av_log(NULL,AV_LOG_ERROR, "Error during encoding\n",NULL);
+                         break; 
+                     }
+ av_log(NULL,AV_LOG_DEBUG, "encodec packet pts:%"PRId64" dts:%"PRId64" f_pts:%"PRId64" duration:%"PRId64" space:%d \n",out_pkt->pts,out_pkt->dts,frame->pts,out_pkt->duration);
+
+                     if (out_pkt->data!=NULL) {
+
+                                          if(out_pkt->dts<0){
+
+                         if(output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts==-1)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=-out_pkt->dts;
+
+if(-out_pkt->dts>output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=-out_pkt->dts;
+                        out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts;
+                        out_pkt->dts+=pkt->dts-out_pkt->dts;
+
+                        out_pkt->pts=out_pkt->pts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts+pkt->dts-out_pkt->dts;
+
+                       }
+                         //out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts+av_rescale_q(1200000, AV_TIME_BASE_Q, output_streams[0]->enc_ctx->time_base);
+                         //out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts;
+                        // out_pkt->dts+=pkt->dts-out_pkt->dts;
+//out_pkt->pts=out_pkt->pts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts+av_rescale_q(1200000, AV_TIME_BASE_Q, output_streams[0]->enc_ctx->time_base);
+//out_pkt->pts=out_pkt->pts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts+pkt->dts-out_pkt->dts;
+ //                      out_pkt->pts+=pkt->dts-out_pkt->dts;
+
+                       out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
+av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+                         out_pkt->duration-=64;
+//为了避免encodec后的packet的dts出现与上一帧重复的情况，对于当前帧小于或者等于上一帧,用上一帧加一替代。
+if(output_streams[stream_mapping[pkt->stream_index]]->current_dts>=out_pkt->dts){
+
+  out_pkt->dts=output_streams[stream_mapping[pkt->stream_index]]->current_dts+1;
+
+}
+
+//out_pkt->dts=out_pkt->pts;
+
+output_streams[stream_mapping[pkt->stream_index]]->current_dts=out_pkt->dts;
+
+
+                       printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
+
+                        
+                     }
+    //输出流
+                     ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
+                     if(ret_enc<0){
+                                               av_log(NULL,AV_LOG_ERROR,"interleaved write error:%d\n",ret_enc);
+                     }
+exit;
+                     break;
+
+                }
+               
+    
+          }
+
+         return 0;
+     }else{
+         return 1;
+     } 
+
 }
 
 int gen_empty_layout_frame_yuva420p(AVFrame **frame,int width, int height)
@@ -1119,6 +1337,9 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
 
                *mainsrc_ctx=mainsrc_ctx_point;
 
+               //av_buffer_unref(&main_buffersrc_par->hw_frames_ctx);
+               //av_free(main_buffersrc_par);
+
  //AVFilterContext *scale_ctx_point=avfilter_graph_get_filter(filter_graph_point, "Parsed_scale_npp_1");
 
    //av_buffersrc_parameters_set(scale_ctx_point,par);
@@ -1175,7 +1396,7 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
 
    config_input(filter_graph_des->ass, AV_PIX_FMT_RGBA,  (*enc_ctx)->width,(*enc_ctx)->height);
 
-
+//config_input(filter_graph_des->ass, AV_PIX_FMT_RGBA,  3840,2160);
    if(filter_graph_des->subtitle_stream_index>=0&&!(filter_graph_des->sub_frame)){
  //动态加载字幕文件
                         init_subtitles_dynamic(filter_graph_des->ass,filter_graph_des->subtitle_dec_ctx);
@@ -1340,14 +1561,14 @@ if(1){
                        bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
                       //subtitle_frame->pts=s_frame_pts; 
   if(filter_graph_des->subtitle_time_offset>0){ 
-                            frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+                            frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);//-av_rescale_q(input_streams[stream_mapping[pkt->stream_index]]->seek_offset*AV_TIME_BASE,AV_TIME_BASE_Q,dec_ctx->time_base);
                         }else if (filter_graph_des->subtitle_time_offset<0){
-                            frame->pts=s_frame_pts-av_rescale_q(-filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);
+                            frame->pts=s_frame_pts-av_rescale_q(-filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);//-av_rescale_q(input_streams[stream_mapping[pkt->stream_index]]->seek_offset*AV_TIME_BASE,AV_TIME_BASE_Q,dec_ctx->time_base);
 
-                        }//else {
-                          //  frame->pts=s_frame_pts;
+                        }else {
+                        frame->pts=s_frame_pts;//-av_rescale_q(input_streams[stream_mapping[pkt->stream_index]]->seek_offset*AV_TIME_BASE,AV_TIME_BASE_Q,dec_ctx->time_base);
 
-                        //}
+                        }
 
                        handle_subtitle2image(filter_graph_des->subtitle_frame,frame->pts,filter_graph_des->ass, dec_ctx->time_base,&if_empty_subtitle);
                        frame->pts=s_frame_pts;
@@ -1385,7 +1606,7 @@ if(1){
                     }else if(filter_graph_des->sub_frame){
 
  bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
-                      //printf("ttttttttttttt %d \n",if_empty_subtitle);
+                      printf("ttttttttttttt %d \n",if_empty_subtitle);
                  handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
 
                  if(if_empty_subtitle){
@@ -1703,6 +1924,278 @@ exit;
 /*只使用音频滤镜对不同音频格式进行转换,与不带only的音频滤镜不同的地方就是不预先根据frame_size的大小,对frame进行裁剪,而是通过buffersink设置frame_size自动处理。
  *
  */
+uint64_t filter_audio_cuda_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping, uint64_t s_pts,OutputStream **output_streams,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph,char *afilter_desrc){
+
+  if(pkt!=NULL){
+
+
+    int ret;
+
+     uint64_t origin_pkt_pts=pkt->pts;
+      uint64_t origin_pkt_duration=pkt->duration;
+  //printf("dec time base:{%d %d}input pkt duration:%"PRId64"\n",dec_ctx->time_base.den,dec_ctx->time_base.num,pkt->duration);
+ //printf(" input pkt duration:%"PRId64"\n",pkt->duration);
+
+
+    ret = avcodec_send_packet(dec_ctx, pkt);
+    if (ret < 0) {
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        //av_frame_unref(frame);
+
+        fprintf(stderr, "Error sending a packet for decoding %d \n",ret);
+        return 1;
+    }
+
+
+    while (ret >= 0) {
+
+
+        ret = avcodec_receive_frame(dec_ctx, frame);
+
+ //printf("in sample fmt:%d\n",frame->format);
+      if (ret == AVERROR(EAGAIN)) {
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+        break;
+      }else if( ret == AVERROR_EOF){
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+                 return 0;
+      }
+        else if (ret < 0) {
+            fprintf(stderr, "Error during decoding %d \n ",ret);
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+
+            return 1 ;
+        }
+
+    int enc_frame_size=(*enc_ctx)->frame_size;
+           float factor=(float)enc_frame_size/(float)frame->nb_samples;
+           int frame_size=frame->nb_samples;
+      int s_stream_index=pkt->stream_index;
+      int s_duation=origin_pkt_duration*factor;
+      uint64_t origin_s_pts=s_pts; 
+        //}
+  //bool if_recreate_pts=true;
+
+
+   /*     if(enc_frame_size>frame->nb_samples&&enc_frame_size%frame->nb_samples==0) {
+          if_recreate_pts=false;
+        }
+*/
+        //AVFrame *frame_enc;
+    if (frame!=NULL){
+
+
+
+ //       printf("Send frame audio :%"PRId64" size %"PRId64" stream index%d aspect{%d %d} factor:%f \n", frame->pts,frame->linesize,pkt->stream_index,frame->sample_aspect_ratio.den,frame->sample_aspect_ratio.num,factor);
+    //int enc_frame_size=(*enc_ctx)->frame_size;
+          //音频重采集
+       if(*filter_graph==NULL){
+
+         if(init_audio_filters(afilter_desrc, buffersink_ctx, buffersrc_ctx, filter_graph, dec_ctx, dec_ctx->time_base,(*enc_ctx))){
+
+         }
+
+       }
+   if (av_buffersrc_add_frame_flags(*buffersrc_ctx, frame, AV_BUFFERSRC_FLAG_PUSH) < 0) {
+                        av_log(NULL, AV_LOG_ERROR, "Error while feeding the audio filtergraph\n");
+                                         }
+//s_pts+=frame->nb_samples;
+s_pts=origin_pkt_pts;
+printf("s_pts w:%"PRId64"\n" ,s_pts);
+
+
+ av_frame_unref(frame);
+
+                    /* pull filtered audio from the filtergraph */
+                    while (ret >=0) {
+                        ret = av_buffersink_get_frame(*buffersink_ctx, frame);
+
+                        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF){
+
+ av_packet_unref(pkt);
+ //
+        av_packet_unref(out_pkt);
+                          //s_pts=s_pts+pkt->duration;
+                           //return s_pts; 
+ //                           printf("####################3\n");
+                         break;
+                        }
+                        if (ret < 0){
+                           break;
+                        }
+
+                                               //s_pts-=enc_frame_size;
+//s_pts+=s_duation;
+printf("s_pts :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts
+    );
+        int ret_enc = avcodec_send_frame(*enc_ctx, frame);
+    if (ret_enc < 0) {
+        fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
+       return 1; 
+    } 
+ av_frame_unref(frame);
+      //接收编码完成的packet
+    while (ret_enc >= 0) {
+        ret_enc = avcodec_receive_packet(*enc_ctx, out_pkt);
+          if (ret_enc == AVERROR(EAGAIN)) {
+ av_packet_unref(pkt);
+ //
+        av_packet_unref(out_pkt);
+                          av_frame_unref(frame);
+ //s_pts=s_pts+pkt->duration;
+
+                    break;
+         }else if( ret_enc == AVERROR_EOF){
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+                      av_frame_unref(frame);
+
+            break;
+
+    
+      }else if (ret_enc < 0) {
+            fprintf(stderr, "Error during encoding\n");
+                         av_frame_unref(frame);
+            break;
+        }
+              
+ av_frame_unref(frame);
+ if (out_pkt->data!=NULL) {
+
+
+   printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
+
+ 
+pkt->stream_index=s_stream_index;
+//out_pkt->pts=pkt->pts;
+//out_pkt->
+
+// out_pkt->pts=pkt->pts;
+//if (pkt->duration==0){
+
+      //printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",pkt->pts,s_pts,pkt->duration);
+//
+     // out_pkt->pts=pkt->pts;
+//out_pkt->pts=out_pkt->pts-av_rescale_q(400000, AV_TIME_BASE_Q,output_streams[stream_mapping[pkt->stream_index]]->st->time_base );
+//out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time+AV_TIME_BASE*0.08;
+//out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
+
+      out_pkt->duration=pkt->duration;
+    printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
+ //   } else if(if_recreate_pts){
+  //  out_pkt->pts=s_pts+out_pkt->duration;
+   // }else {
+    //out_pkt->pts=pkt->pts-pkt->duration*(factor-1);
+//}
+//if((out_pkt->pts % 3) == 0){
+ //  out_pkt->pts++;
+//}
+//
+//
+   //output_streams[stream_mapping[pkt->stream_index]]->frame_number++;
+ out_pkt->dts=out_pkt->pts;
+ //s_pts = out_pkt->pts;
+
+ //s_pts = out_pkt->pts+out_pkt->duration;
+ }else{
+
+ }
+//out_pkt->dts=out_pkt->pts;
+  /*if(!output_streams[0]->initialized){
+ av_frame_unref(frame);
+ av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+return s_pts;
+  }
+*/
+//av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+
+//out_pkt->pts=s_pts;
+//out_pkt->dts=s_pts;
+
+//if (factor<1&factor>0){
+//
+     out_pkt->duration=s_duation;
+s_pts+=s_duation;
+  /*  //out_pkt->pts=s_pts;
+   if(origin_s_pts==0){
+
+      out_pkt->pts=origin_pkt_pts;
+
+    }else{
+     // out_pkt->pts=pkt->pts-pkt->duration*(factor-1);a
+     //
+     float leve_factor=(float)s_pts/(float)frame_size;
+
+     printf(" leve fatch:%.2f\n",leve_factor);
+     //uint64_t intver_duration=av_rescale_q(origin_s_pts/,AV_TIME_BASE_Q, (*enc_ctx)->time_base);
+     out_pkt->pts=origin_pkt_pts-origin_pkt_duration+origin_pkt_duration*(1-leve_factor);
+
+
+printf("origin_s_pts:%"PRId64" out pts:%"PRId64" in pts:%"PRId64" \n",origin_s_pts,out_pkt->pts,pkt->pts);
+    }
+*/
+//}
+
+     // av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+    //输出流
+
+    ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
+
+
+   
+    av_frame_unref(frame);
+    //av_frame_free(&frame_enc);
+
+    if(ret_enc<0){
+        printf("interleaved write error:%d",ret_enc);
+//av_packet_unref(pkt);//确保非输出packet也释放
+        //return ret_enc;
+    }
+//if (factor<1&factor>0){
+
+
+ //   s_pts=s_pts+s_duation;
+
+
+    /*if((output_streams[stream_mapping[pkt->stream_index]]->frame_number%(int)(1/(1-factor)))==0){
+        out_pkt->pts++;
+
+    }*/
+//}//
+
+
+    av_packet_unref(out_pkt);
+   
+    }
+//printf("####################33\n");
+
+
+      }
+    //return s_pts;  
+//printf("####################34\n");
+    }
+  
+ 
+    }
+}
+  
+
+return s_pts;
+
+}
+
+/*只使用音频滤镜对不同音频格式进行转换,与不带only的音频滤镜不同的地方就是不预先根据frame_size的大小,对frame进行裁剪,而是通过buffersink设置frame_size自动处理。
+ *
+ */
 uint64_t auto_audio_cuda_codec_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping, uint64_t s_pts,OutputStream **output_streams,AVFilterContext **buffersink_ctx, AVFilterContext **buffersrc_ctx ,AVFilterGraph **filter_graph,char *afilter_desrc){
 
   if(pkt!=NULL){
@@ -1813,7 +2306,8 @@ printf("s_pts w:%"PRId64"\n" ,s_pts);
 
                                                //s_pts-=enc_frame_size;
 //s_pts+=s_duation;
-printf("s_pts r:%"PRId64"\n" ,s_pts);
+printf("s_pts :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts
+    );
         int ret_enc = avcodec_send_frame(*enc_ctx, frame);
     if (ret_enc < 0) {
         fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
@@ -1847,6 +2341,10 @@ printf("s_pts r:%"PRId64"\n" ,s_pts);
               
  av_frame_unref(frame);
  if (out_pkt->data!=NULL) {
+
+
+   printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
+
  
 pkt->stream_index=s_stream_index;
 //out_pkt->pts=pkt->pts;
@@ -1863,7 +2361,7 @@ pkt->stream_index=s_stream_index;
 out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
 
       out_pkt->duration=pkt->duration;
-    
+    printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
  //   } else if(if_recreate_pts){
   //  out_pkt->pts=s_pts+out_pkt->duration;
    // }else {
@@ -1966,8 +2464,6 @@ printf("origin_s_pts:%"PRId64" out pts:%"PRId64" in pts:%"PRId64" \n",origin_s_p
 return s_pts;
 
 }
-
-
 /*  push2trtsp_sub_logo
  * 将视频流通过rtsp协议推送到直播服务器，硬编字幕,并实现logo 的周期淡入淡出
  * 
@@ -1987,7 +2483,7 @@ return s_pts;
  *
  **/
 
-int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, const int audio_index,const int subtitle_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
+int push2rtsp_sub_logo_cuda_2(const char *video_file_path, const int video_index, const int audio_index,const int subtitle_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
     
     /*函数内全局输入输出流数组&流数目
      */
@@ -2006,7 +2502,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
     /*初始化输入ForamtContext
      */
     AVFormatContext *ifmt_ctx = avformat_alloc_context(), *ofmt_ctx = NULL;
-    AVBufferRef **hw_device_ctx =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
+    AVBufferRef **hw_device_ctx;// =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
 
 
     /*初始化pkt,out_pkt,frame*/
@@ -2173,8 +2669,10 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
      */ 
     handle_video_codec=simple_video_codec_func;
     handle_interleaved_write_frame=seek_interleaved_write_frame_func;
-    handle_video_complex_filter=all_subtitle_logo_native_cuda_video_codec_func;
-    handle_audio_complex_filter=auto_audio_cuda_codec_func;
+    //handle_video_complex_filter=all_subtitle_logo_native_cuda_video_codec_func;
+    handle_video_complex_filter=only_dec_enc_native_cuda_video_codec_func; 
+    //handle_audio_complex_filter=auto_audio_cuda_codec_func;
+    handle_audio_complex_filter=filter_audio_cuda_codec_func;
     handle_subtitle_codec=simple_subtitle_codec_func;
 
     /*设置ifmt的callback处理函数
@@ -2235,8 +2733,12 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     AVDictionary* options = NULL;
 
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "8388600", 0);
+    //av_dict_set(&options, "buffer_size", "838860000", 0);
+    av_dict_set(&options, "buffer_size", "102400000", 0);
+    av_dict_set(&options, "max_delay", "60000000", 0);
 
+    av_dict_set(&options, "timeout","60000000",0);
+    av_dict_set(&options, "stimeout","60000000",0);
   
     stream_mapping_size = ifmt_ctx->nb_streams;
 
@@ -2387,9 +2889,11 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
               //enc_ctx->width=3840;
               //enc_ctx->height=1616;
-                        
+                      
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
-
+              enc_ctx->gop_size=120;
+              
+              enc_ctx->max_b_frames=0;
 
 //init_filter_graph_func(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
  
@@ -2397,8 +2901,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
               if(if_hw){
               //硬件加速    
                   enc_ctx->pix_fmt=AV_PIX_FMT_CUDA;
-                  //enc_ctx->sw_pix_fmt=AV_PIX_FMT_P010LE;
-                  enc_ctx->sw_pix_fmt=AV_PIX_FMT_YUV420P;
+                  enc_ctx->sw_pix_fmt=AV_PIX_FMT_P010LE;
+                  //enc_ctx->sw_pix_fmt=AV_PIX_FMT_YUV420P;
 
               /* set hw_frames_ctx for encoder's AVCodecContext 
                * 设置编码Context的hwframe context
@@ -2441,6 +2945,10 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 //enc_ctx->strict_std_compliance=-2;
                 //rtsp只支持acc音频编码,acc编码的采样格式为flp
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                //enc_ctx->bit_rate=384000; 
+                //enc_ctx->bit_rate;
+                enc_ctx->profile=FF_PROFILE_AAC_MAIN;
+                enc_ctx->bit_rate_tolerance=100000;
                 //设置音频滤镜描述 
                 AVBPrint arg;
                 av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
@@ -2452,6 +2960,14 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 continue;
             }
 
+           if(in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+
+               av_dict_set(&output_stream->encoder_opts,"aac_pred","1",0);
+               av_dict_set(&output_stream->encoder_opts,"aac_coder","2",0);
+
+
+          // }
+           }
 
 
            if(in_codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
@@ -2551,7 +3067,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             bool if_read_packet=true;
 
             for (i = 0; i < nb_input_streams; i++) {
-            //  for(i=0;i<1;i++){
+              //for(i=0;i<1;i++){
                 ist = input_streams[i];
                 int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
                 //此处的当前packet的pts时间要选择dts，不然会出现卡帧情况;
@@ -2563,24 +3079,24 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=1.0;//-1 - 1
+int cache_time=20.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
-                if (pts > now+AV_TIME_BASE*cache_time){
+  //              if (pts > now-AV_TIME_BASE*cache_time&&i==0){
+                  
+   //                 if_read_packet=false;
+ //printf("************************* count_1:%d \n",count_1);
+
+                    //count_1++;
+                    //break;
+    //            }
+  if (pts > now+AV_TIME_BASE*cache_time){
                   
                     if_read_packet=false;
  //printf("************************* count_1:%d \n",count_1);
 
                     //count_1++;
-//                    break;
+                    //break;
                 }
- // if (pts > now&&i==1){
-                  
-  //                  if_read_packet=false;
- //printf("************************* count_1:%d \n",count_1);
-
-                    //count_1++;
-//                    break;
-//                }
 
                 
 /*}else{
@@ -2689,7 +3205,10 @@ return ret;
           for(int i=0;i<nb_output_streams;i++){
         //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
         //avcodec_close(output_streams[i]->enc_ctx);
-
+        //
+        //if(task_handle_process_info->control->seek_time>=){
+             input_streams[i]->seek_offset-=task_handle_process_info->control->seek_time;
+        //}
              input_streams[i]->start-=(task_handle_process_info->control->seek_time*AV_TIME_BASE);
 //input_streams[i]->start-=(task_handle_process_info->control->current_seek_pos_time+task_handle_process_info->control->seek_time*AV_TIME_BASE);
 input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[i]->st->time_base);
@@ -2929,7 +3448,7 @@ end:
     av_packet_free(&out_pkt);
     av_log(NULL,AV_LOG_INFO,"free pkt & out_pkt: \n");
 
-    av_buffer_unref(hw_device_ctx);
+    //av_buffer_unref(hw_device_ctx);
 
     av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
 
@@ -2938,11 +3457,11 @@ end:
 
     //释放输入流的解码AVCodec_Context
    
-       av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
+    av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
     for(int i=0;i<nb_input_streams;i++){
 
        
-        av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
+        //av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
 
         
 
@@ -2971,16 +3490,21 @@ end:
         //
         //
         //output_streams[i]->enc_ctx->hw_device_ctx=NULL;
-        av_buffer_unref(&output_streams[i]->enc_ctx->hw_device_ctx);
-        av_log(NULL,AV_LOG_INFO,"free enc_ctx num:%d \n",i);
+if(&output_streams[i]->enc_ctx->hw_device_ctx){
+        //av_buffer_unref(&output_streams[i]->enc_ctx->hw_device_ctx);
         avcodec_free_context(&output_streams[i]->enc_ctx);
+av_log(NULL,AV_LOG_INFO,"free enc_ctx num:%d \n",i);
+;
+};
 
     }
  
-   
+   //if(filter_graph_des->main_src_hw_frames_ctx&&*(filter_graph_des->main_src_hw_frames_ctx))
+    //   av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
+     //  av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
 
     
-    if(ret!=AVERROR(ECONNREFUSED)){
+    if(ret!=AVERROR(ECONNREFUSED)&&0){
 
         avfilter_free(*mainsrc_ctx);
         avfilter_free(*logo_ctx);
@@ -3001,14 +3525,1114 @@ end:
         //(*filter_graph)->filters[i]->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
 
 //}
-    av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
-    av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
-    //if(filter_graph){
-    avfilter_graph_free(filter_graph);
+        if(filter_graph){
+        avfilter_graph_free(filter_graph);
+  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
+        }
+//(*filter_graph)->
 
+ if(filter_graph_des->main_src_hw_frames_ctx&&*(filter_graph_des->main_src_hw_frames_ctx)){
+       av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
+       av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
+ }
+    
+  
 
-    //}
+    
+
+    //if(afilter_graph)
+    avfilter_free(*abuffersrc_ctx);
+    av_log(NULL,AV_LOG_INFO,"free abuffersrc_ctx \n");
+    avfilter_free(*abuffersink_ctx);
+    av_log(NULL,AV_LOG_INFO,"free abuffersink_ctx \n");
+
+    avfilter_graph_free(afilter_graph);
     av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
+    if(filter_graph_des->ass) 
+        av_free(filter_graph_des->ass);
+    
+    if(filter_graph_des->overlay_ctx)
+        av_free(filter_graph_des->overlay_ctx);
+
+    if(filter_graph_des->subtitle_path)
+        av_free(filter_graph_des->subtitle_path);
+    if(filter_graph_des)
+        av_free(filter_graph_des);
+    av_log(NULL,AV_LOG_INFO,"free filter_graph_des \n");
+    //av_freep只能用于指向指针的指针,因为还需要对指针赋NULL，否则找不到地址
+
+    av_freep(input_streams);
+    av_freep(output_streams);
+    
+
+    //if (ret < 0 && ret != AVERROR_EOF) {
+     //   fprintf(stderr, "Error occurred: %s\n", av_err2str(ret));
+      //  return ret;
+    //}
+
+    return 0;
+
+}
+
+
+/*  push2trtsp_sub_logo
+ * 将视频流通过rtsp协议推送到直播服务器，硬编字幕,并实现logo 的周期淡入淡出
+ * 
+ *
+ * video_file_path:
+ * video_index:
+ * audio_index:
+ * subtitle_index;
+ * subtitle_file_path:
+ * logo_frame:
+ * rtsp_pusth_path:
+ * if_logo_fade:
+ * duration_frames:
+ * interval_frames:
+ * present_frames:
+ * task_handle_process_info:
+ *
+ **/
+
+int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, const int audio_index,const int subtitle_index,const char *subtitle_file_path,AVFrame **logo_frame,const char *rtsp_push_path,bool if_hw,bool if_logo_fade,uint64_t duration_frames,uint64_t interval_frames,uint64_t present_frames,TaskHandleProcessInfo *task_handle_process_info){
+    
+    /*函数内全局输入输出流数组&流数目
+     */
+    InputStream **input_streams = NULL;
+    int        nb_input_streams = 0;
+    OutputStream **output_streams = NULL;
+    int        nb_output_streams = 0;
+
+    AVOutputFormat *ofmt = NULL;
+
+    SubtitleFrame *sub_frame=NULL;
+
+printf("&&&&&&&&&&&&&&&&&&&&&&&&&&\n");
+  
+
+    /*初始化输入ForamtContext
+     */
+    AVFormatContext *ifmt_ctx = avformat_alloc_context(), *ofmt_ctx = NULL;
+    AVBufferRef **hw_device_ctx;// =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
+
+
+    /*初始化pkt,out_pkt,frame*/
+    AVPacket *pkt=av_packet_alloc();
+    AVPacket *out_pkt=av_packet_alloc();
+    AVFrame *frame=av_frame_alloc();
+
+
+    /*初始化视频滤镜*/
+
+    AVFilterGraph **filter_graph= (AVFilterGraph **)av_malloc(sizeof(AVFilterGraph *));
+    *filter_graph=NULL;
+    //主源
+    AVFilterContext **mainsrc_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+    //logo源 
+    AVFilterContext **logo_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+    AVFilterContext **subtitle_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+
+    AVFilterContext **resultsink_ctx = (AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+
+   /*初始化滤镜描述*/
+    FilterGraph *filter_graph_des = av_mallocz(sizeof(*filter_graph_des));
+    filter_graph_des->subtitle_path=av_mallocz(strlen(subtitle_file_path)+1);
+    
+    filter_graph_des->current_frame_pts=0;
+    filter_graph_des->ass=NULL;
+    filter_graph_des->overlay_ctx=NULL;
+
+    //filter_graph_des->packet_queue=av_fifo_alloc(sizeof(PacketDes)*10);
+    //filter_graph_des->encode_delay=-1;
+    //filter_graph_des->encode_start=-1;
+
+
+    //printf("###############f %s \n",filter_graph_des->subtitle_path);
+
+    /*复制字幕文件名*/
+    strcpy(filter_graph_des->subtitle_path, subtitle_file_path);
+
+
+    /*初始化指向音频滤镜指针的指针*/
+    AVFilterGraph **afilter_graph= (AVFilterGraph **)av_malloc(sizeof(AVFilterGraph **));
+    *afilter_graph=NULL;
+
+    /*初始化指向音频滤镜src指针的指针*/
+    AVFilterContext **abuffersrc_ctx=(AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+    *abuffersrc_ctx=NULL;
+    /*初始化指向音频滤镜sink指针的指针*/
+    AVFilterContext **abuffersink_ctx = (AVFilterContext **)av_malloc(sizeof(AVFilterContext **));
+    *abuffersink_ctx=NULL;
+
+    /*音频滤镜定义语句*/
+    char *afilters_descr=NULL;
+     /*初始化logo帧*/
+    AVFrame *new_logo_frame=av_frame_alloc();
+    //AVFrame *new_logo_frame=(*logo_frame);
+    new_logo_frame->width=(*logo_frame)->width;
+    new_logo_frame->height=(*logo_frame)->height;
+    new_logo_frame->format=(*logo_frame)->format;
+
+    
+    int ret;
+    /*初始化logo帧的buffer空间*/               
+    ret=av_frame_get_buffer(new_logo_frame, 1) ;
+    if (ret<0){
+        printf("Error: fill new logo frame failed:%d \n",ret);
+
+    }
+
+    (*logo_frame)->hw_frames_ctx=NULL;
+  //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12564 %d \n", (*logo_frame)->data[0]);
+    /*拷贝输入logo帧到新的logo帧,避免输入logo帧被外部调用程序释放,如：golang*/      
+    ret=av_frame_copy_props(new_logo_frame, (*logo_frame));//拷贝属性
+ //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12565 %d \n", (*logo_frame));
+    ret=av_frame_copy(new_logo_frame, (*logo_frame));//拷贝数据
+   //printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@12566 %d \n", (*logo_frame));
+    if (ret<0){
+        printf("Error: copy logo frame failed:%d \n",ret);
+
+    }
+
+
+//AVFrame  *subtitle_empty_frame=NULL;g
+ // if(!subtitle_empty_frame)en_empty_layout_frame(100,100);
+ //
+    filter_graph_des->subtitle_empty_frame=(AVFrame **)av_malloc(sizeof(AVFrame **));
+
+    filter_graph_des->subtitle_frame=(AVFrame **)av_malloc(sizeof(AVFrame **));
+//memset(filter_graph_des->subtitle_frame,0,sizeof(AVFrame **));
+    *(filter_graph_des->subtitle_frame)=NULL;
+gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
+    filter_graph_des->logo_frame=&new_logo_frame;
+//    filter_graph_des->subtitle_frame=filter_graph_des->subtitle_empty_frame;
+*(filter_graph_des->subtitle_frame)=*(filter_graph_des->subtitle_empty_frame);
+    /*手动释放输入logo帧*/ 
+    av_frame_unref(*logo_frame);
+    av_frame_free(logo_frame);
+    //logo_frame=NULL;
+    
+    filter_graph_des->if_hw=if_hw;
+    filter_graph_des->if_fade=if_logo_fade;
+
+    filter_graph_des->duration_frames=duration_frames;
+    filter_graph_des->interval_frames = interval_frames;
+    filter_graph_des->present_frames=present_frames;
+
+   
+    //filter_graph_des->sub_type=sub_type;
+    filter_graph_des->subtitle_stream_index=subtitle_index;
+   
+   
+
+    int  i;
+    int stream_index = 0;
+    int *stream_mapping = NULL;
+    int stream_mapping_size = 0;
+    bool ifcodec=true;//是否解编码
+    bool rate_emu = true;//是否按照播放速度推流
+    int audio_pts=0;
+
+    /*解码Context和编码Context
+     */
+    AVCodecContext *dec_ctx= NULL,*enc_ctx= NULL;
+    enum AVHWDeviceType type;
+
+
+
+    /*视频解编码处理函数
+      */
+    int (*handle_video_codec)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *,InputStream **input_streams,OutputStream **output_streams);  
+
+    /*视频滤镜解编码处理函数
+      */
+    int (*handle_video_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **,int *,AVFilterGraph **,AVFilterContext **,AVFilterContext **,AVFilterContext **,AVFilterContext **,FilterGraph *,OutputStream **output_streams );  
+
+
+
+    /*音频解编码处理函数
+     * */
+    uint64_t (*handle_audio_codec)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int *),int *,uint64_t); 
+
+    /*音频滤镜解编码处理函数
+      */
+    uint64_t (*handle_audio_complex_filter)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,int,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **,int *,uint64_t,OutputStream **,AVFilterContext **, AVFilterContext **,AVFilterGraph **,char *afilter_desrc);
+
+    /*字幕解编码处理函数
+      */
+    int (*handle_subtitle_codec)(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCodecContext *sub_condec_ctx,AVFormatContext *fmt_ctx,int *stream_mapping,InputStream **input_streams,OutputStream **output_streams,AssContext *ass);  
+
+
+    /*帧输出处理函数
+     * */
+    int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **);  
+
+
+
+    /*设置日志级别
+     * */
+
+
+    av_log_set_level(AV_LOG_DEBUG);
+   
+    
+    /*设置帧处理函数
+     */ 
+    handle_video_codec=simple_video_codec_func;
+    handle_interleaved_write_frame=seek_interleaved_write_frame_func;
+    handle_video_complex_filter=all_subtitle_logo_native_cuda_video_codec_func;
+    //handle_video_complex_filter=only_dec_enc_native_cuda_video_codec_func; 
+    handle_audio_complex_filter=auto_audio_cuda_codec_func;
+    handle_subtitle_codec=simple_subtitle_codec_func;
+
+    /*设置ifmt的callback处理函数
+     */
+    ifmt_ctx->interrupt_callback=int_cb;
+
+    
+    /*初始化硬件加速设备
+     */ 
+    if(if_hw){
+      type = av_hwdevice_find_type_by_name("cuda");
+      if (type == AV_HWDEVICE_TYPE_NONE) {
+          av_log(NULL,AV_LOG_ERROR, "Device type %s is not supported.\n", "cuda");
+          av_log(NULL,AV_LOG_ERROR, "Available device types:");
+          while((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
+              av_log(NULL,AV_LOG_ERROR, " %s \n", av_hwdevice_get_type_name(type));
+        }
+    }
+
+
+
+
+    /*打开视频文件
+     */ 
+    if ((ret = avformat_open_input(&ifmt_ctx, video_file_path, 0, 0)) < 0) {
+        av_log(NULL,AV_LOG_ERROR, "Could not open input file '%s'", video_file_path);
+        goto end;
+    }
+
+    /*查看视频流信息
+     */ 
+    if ((ret = avformat_find_stream_info(ifmt_ctx, 0)) < 0) {
+        av_log(NULL,AV_LOG_ERROR,"Failed to retrieve input stream information");
+        goto end;
+    }
+
+    /*打印视频流信息
+     */ 
+    av_dump_format(ifmt_ctx, 0, video_file_path, 0);
+// ret=handle_seek(ifmt_ctx,task_handle_process_info->control );
+
+  //task_handle_process_info->control->subtitle_time_offset+=task_handle_process_info->control->seek_time*1000;
+ //task_handle_process_info->control->seek_time=0x00;
+ //ret = av_read_frame(ifmt_ctx, pkt); 
+
+    /*打开RTSP视频推流Context
+     */ 
+    avformat_alloc_output_context2(&ofmt_ctx, NULL, "RTSP", rtsp_push_path);
+    if (!ofmt_ctx) {
+       av_log(NULL,AV_LOG_ERROR,  "Could not create output context\n");
+        ret = AVERROR_UNKNOWN;
+        goto end;
+    }
+    
+
+    /*设置RTSP视频推流协议为TCP
+     */ 
+    AVDictionary* options = NULL;
+
+    av_dict_set(&options, "rtsp_transport", "tcp", 0);
+    av_dict_set(&options, "buffer_size", "838860", 0);
+    //av_dict_set(&options, "buffer_size", "1024", 0);
+
+  
+    stream_mapping_size = ifmt_ctx->nb_streams;
+
+    /*初始化stream_mapping 
+     */
+    stream_mapping = av_mallocz_array(stream_mapping_size, sizeof(*stream_mapping));
+    if (!stream_mapping) {
+        ret = AVERROR(ENOMEM);
+        goto end;
+    }
+
+    ofmt = ofmt_ctx->oformat;
+
+
+    for (i = 0; i < ifmt_ctx->nb_streams; i++) {
+        stream_mapping[i] = -1;
+
+        //选择视频流,音频流和字幕流
+        if (i!=video_index&&i!=audio_index
+            &&i!=subtitle_index){
+        //if(i!=video_index){
+            continue;
+        }
+        //数组扩容
+        GROW_ARRAY(input_streams, nb_input_streams);
+
+        av_log(NULL,AV_LOG_DEBUG,"i: %d nb_input_streams %d \n",i,nb_input_streams);
+               //增加输入流
+        add_input_stream_cuda(ifmt_ctx,i,nb_input_streams-1,if_hw,type,hw_device_ctx,input_streams);
+        
+
+        AVStream *out_stream;
+        AVStream *in_stream = ifmt_ctx->streams[i];
+
+        //输入流解码参数
+        AVCodecParameters *in_codecpar = in_stream->codecpar;
+        stream_mapping[i]=nb_input_streams-1;
+        //初始化字幕帧
+        if(i==subtitle_index&&in_codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE){
+            filter_graph_des->subtitle_dec_ctx=input_streams[nb_input_streams-1]->dec_ctx;
+            AVCodecDescriptor *dec_desc = avcodec_descriptor_get(in_stream->codecpar->codec_id);
+            if (dec_desc && (dec_desc->props & AV_CODEC_PROP_BITMAP_SUB)){
+
+               sub_frame=alloc_subtitle_frame();
+               sub_frame->pts=0;
+               filter_graph_des->sub_frame=sub_frame;
+
+            }
+        }
+
+        if(in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO||in_codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
+
+            //新建ofmt_ctx的输出流
+            out_stream = avformat_new_stream(ofmt_ctx, NULL);
+            if (!out_stream) {
+                av_log(NULL,AV_LOG_ERROR, "Failed allocating output stream\n");
+                ret = AVERROR_UNKNOWN;
+                goto end;
+            }
+
+        
+        /*进入解编码处理
+         */
+            
+        if(ifcodec){
+            GROW_ARRAY(output_streams, nb_output_streams);
+            OutputStream *output_stream;
+
+            /*配置输出流,字幕流不配置输出流
+             */
+            if (in_codecpar->codec_type == AVMEDIA_TYPE_AUDIO){
+                //音频,RTSP推流，音频只支持AAC
+                output_stream = add_output_stream_cuda(ofmt_ctx, nb_output_streams-1,if_hw, in_codecpar->codec_type,AV_CODEC_ID_AAC,output_streams);
+            }else if (in_codecpar->codec_type == AVMEDIA_TYPE_VIDEO){
+
+                //视频
+                output_stream = add_output_stream_cuda(ofmt_ctx, nb_output_streams-1,if_hw, in_codecpar->codec_type,task_handle_process_info->video_codec_id,output_streams);
+
+           }
+
+
+           if (!output_stream) {
+              av_log(NULL,AV_LOG_ERROR, "Could not allocate output stream\n");
+              ret = AVERROR_UNKNOWN;
+              goto end;
+        
+           }
+ 
+            enc_ctx=output_stream->enc_ctx;
+
+           /*设置enc_ctx的视频
+            */
+           if (in_codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
+
+
+
+           /*统计进度,已视频流为主
+            */
+
+              if (task_handle_process_info==NULL){
+
+                  TaskHandleProcessInfo *info=av_malloc(sizeof(TaskHandleProcessInfo *)); 
+
+                  task_handle_process_info=info  ; 
+              }
+
+              av_log(NULL,AV_LOG_DEBUG,"Total frames:%"PRId64"\n",ifmt_ctx->duration); 
+
+              task_handle_process_info->total_duration=ifmt_ctx->duration;
+
+              task_handle_process_info->pass_duration=0;
+
+              //提取输入流的比特率
+              if(task_handle_process_info->bit_rate==0){
+
+                  task_handle_process_info->bit_rate=ifmt_ctx->bit_rate;
+                    
+
+                  enc_ctx->bit_rate=task_handle_process_info->bit_rate;
+              }else if (task_handle_process_info->bit_rate>0){
+
+                  enc_ctx->bit_rate=task_handle_process_info->bit_rate;
+
+              }
+      
+              //设置编码Context的编码器类型      
+              enc_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
+              //设置编码Context的time_base 
+              //enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
+              //enc_ctx->time_base.den=24000;
+              //enc_ctx->time_base.num=1001;   
+              enc_ctx->time_base=av_inv_q(input_streams[nb_input_streams-1]->dec_ctx->framerate) ;  
+              av_log(NULL,AV_LOG_DEBUG,"video stream time base:{%d %d} bitrate :%d \n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->bit_rate);
+              //设置编码Context的尺寸 
+
+              if(task_handle_process_info->width>0&&task_handle_process_info->height>0){
+                  enc_ctx->width=task_handle_process_info->width;
+                  enc_ctx->height=task_handle_process_info->height; 
+
+
+              }else{
+                  enc_ctx->width = input_streams[nb_input_streams-1]->dec_ctx->width;
+                  enc_ctx->height = input_streams[nb_input_streams-1]->dec_ctx->height;
+
+              }
+
+              enc_ctx->height=aligned_frame_height(enc_ctx->height);
+
+              //enc_ctx->width=3840;
+              //enc_ctx->height=1616;
+                        
+              enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
+
+
+//init_filter_graph_func(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
+ 
+//printf("!!!!!!!!!!!!!!!!!!!!!11 %d \n",input_streams[nb_input_streams-1]->dec_ctx->hw_);
+              if(if_hw){
+              //硬件加速    
+                  enc_ctx->pix_fmt=AV_PIX_FMT_CUDA;
+                  //enc_ctx->sw_pix_fmt=AV_PIX_FMT_P010LE;
+                  enc_ctx->sw_pix_fmt=AV_PIX_FMT_YUV420P;
+
+              /* set hw_frames_ctx for encoder's AVCodecContext 
+               * 设置编码Context的hwframe context
+               * */
+
+                  /*if ( set_hwframe_ctx_cuda(enc_ctx, *resultsink_ctx) < 0) {
+                      av_log(NULL,AV_LOG_ERROR, "Failed to set hwframe context.\n");
+                      ret = AVERROR_UNKNOWN;
+                      goto end;
+                  } 
+*/
+               }else{
+                   enc_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+               }                                      
+               if(ofmt_ctx->oformat->flags & AVFMT_GLOBALHEADER){
+                  enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+               }
+
+            /*设置enc_ctx的视频
+            */
+            }else if(in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+                enc_ctx->sample_rate=input_streams[nb_input_streams-1]->dec_ctx->sample_rate;
+
+               /*需要通过声道数找默认的声道布局，不然会出现aac 5.1(side)
+                * */
+
+                if(task_handle_process_info->audio_channels==0){         
+                    enc_ctx->channels=input_streams[nb_input_streams-1]->dec_ctx->channels;
+                }else{
+                    enc_ctx->channels=task_handle_process_info->audio_channels;
+                }
+                        
+                enc_ctx->channel_layout=av_get_default_channel_layout(enc_ctx->channels);
+                //enc_ctx->channel_layout=AV_CH_LAYOUT_7POINT1_WIDE;            
+                enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
+
+                av_log(NULL,AV_LOG_DEBUG,"audio stream time base:{%d %d} sample_rate:%d channel_layout:%d channels:%d\n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->sample_rate,enc_ctx->channel_layout,enc_ctx->channels);
+                //enc_ctx->strict_std_compliance=-2;
+                //rtsp只支持acc音频编码,acc编码的采样格式为flp
+                enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                //设置音频滤镜描述 
+                AVBPrint arg;
+                av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
+                av_bprintf(&arg, "aformat=sample_fmts=%s",av_get_sample_fmt_name(enc_ctx->sample_fmt));
+                afilters_descr=arg.str;
+
+
+            }else{
+                continue;
+            }
+
+
+
+           if(in_codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
+               enc_ctx->hw_device_ctx=av_buffer_ref(input_streams[nb_input_streams-1]->dec_ctx->hw_device_ctx);
+//需要重新设置hw_frames_ctx否则无法修改hw_frames_ctx的sw_format
+//(*enc_ctx)->hw_frames_ctx=av_buffer_ref(frame->hw_frames_ctx);
+//if(0){
+               if ( set_hwframe_ctx(enc_ctx, enc_ctx->hw_device_ctx) < 0) {
+                      av_log(NULL,AV_LOG_ERROR, "Failed to set hwframe context.\n");
+               } 
+
+//((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
+
+               av_dict_set(&output_stream->encoder_opts,"preset","p2",0);
+
+               //nvenc的preset不宜过低，过低也将出现视频卡顿
+
+          // }
+           }
+
+      if(1){ 
+        //    if(in_codecpar->codec_type!=AVMEDIA_TYPE_VIDEO){
+           /*打开编码Context
+            */
+            if ((ret = avcodec_open2(enc_ctx, output_stream->enc,&output_stream->encoder_opts )) < 0) {
+                  av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
+                 goto end;
+            }  
+
+            //从编码Context拷贝参数给输出流,必须在avcodec_open2之后再设置输出流参数;
+            ret = avcodec_parameters_from_context(out_stream->codecpar,enc_ctx );
+            if(ret < 0){
+                av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
+                 goto end;
+            }
+
+         
+
+
+        }}else{
+
+            //不编解码仅有Packet转发
+            ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
+            if (ret < 0) {
+                av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
+                goto end;
+            }
+
+        } 
+        
+    }}
+    //打印输出流信息
+    av_dump_format(ofmt_ctx, 0, rtsp_push_path, 1);
+    //打开输出流文件
+    //
+ 
+    if (!(ofmt->flags & AVFMT_NOFILE)) {
+        ret = avio_open(&ofmt_ctx->pb, rtsp_push_path, AVIO_FLAG_WRITE);
+        if (ret < 0) {
+            av_log(ofmt_ctx,AV_LOG_ERROR, "Could not open output file '%s'", rtsp_push_path);
+            goto end;
+        }
+    }
+    //写入流头部信息
+    ret = avformat_write_header(ofmt_ctx, &options);
+    if (ret < 0) {
+        av_log(ofmt_ctx,AV_LOG_ERROR, "Error occurred when opening output file %d \n", ret);
+        goto end;
+    }
+    /*完成编解码context设置,开始读取packet，并逐packet处理
+     */
+
+    AVStream *in_stream, *out_stream;
+    InputStream *ist;
+
+    //bool retry =true;
+
+    int64_t start_frame=0,end_frame=0;
+    int64_t paused_time=0;
+// ret=handle_seek(ifmt_ctx,task_handle_process_info->control->seek_time );
+//task_handle_process_info->control->seek_time=0x00;
+    //循环读取packet,直到接到任务取消信号
+    int count_1,count_2=0;
+    while (!task_handle_process_info->control->task_cancel) {
+
+
+      //if(task_handle_process_info->pass_duration>3000000){
+
+
+//        task_handle_process_info->control->task_cancel=true;
+
+ //     }
+   /*处理控制速度
+         */
+        
+        if (rate_emu) {
+            bool if_read_packet=true;
+
+            for (i = 0; i < nb_input_streams; i++) {
+            //  for(i=0;i<1;i++){
+                ist = input_streams[i];
+                int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
+                //此处的当前packet的pts时间要选择dts，不然会出现卡帧情况;
+                int64_t current_timestap=av_gettime_relative();
+                int64_t now = current_timestap-ist->start;
+//printf("&&&&&&&&&&& %d %"PRId64" %"PRId64"  %"PRId64" %d \n",i,pts,now,ist->start,pts-now);
+//
+//
+
+//if(i==0){
+//控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
+int cache_time=1.0;//-1 - 1
+  //TS设置缓冲1个AV_TIME_BASE
+                if (pts > now+AV_TIME_BASE*cache_time){
+                  
+                    if_read_packet=false;
+ //printf("************************* count_1:%d \n",count_1);
+
+                    //count_1++;
+//                    break;
+                }
+ // if (pts > now&&i==1){
+                  
+  //                  if_read_packet=false;
+ //printf("************************* count_1:%d \n",count_1);
+
+                    //count_1++;
+//                    break;
+//                }
+
+                
+/*}else{
+// if (pts > now+(input_streams[1]->start-input_streams[0]->start)-1){
+ if (pts > now){
+                    if_read_packet=false;
+ //printf("************************* count_2:%d  %"PRId64"\n",count_2,now+(input_streams[1]->start-input_streams[0]->start));
+                    count_2++;
+                    break;
+                }
+
+}*/
+};
+            if (!if_read_packet){
+             // printf("************************* %d %d  %f \n",count_1,count_2,0);
+                             continue;
+            }
+
+count_1=count_2=0;
+        };
+
+      /*处理暂停*/
+      if(task_handle_process_info->control->task_pause){
+
+        if(!paused_time){
+
+          paused_time=av_gettime_relative();
+
+        }
+       // sleep(1);
+ for(int i=0;i<nb_output_streams;i++){
+ ist = input_streams[i];
+
+ //out_pkt=pkt;//output_streams[0]->pkt;
+ out_pkt->pts=av_gettime_relative()-input_streams[i]->start_time;
+                         out_pkt->dts=out_pkt->pts;
+                         out_pkt->duration=pkt->duration;
+                         out_pkt->stream_index=i;
+
+     /*if (rate_emu) {
+            //ist = input_streams[i];
+            //if (pkt != NULL && pkt->dts != AV_NOPTS_VALUE) {
+               // ist->next_dts = ist->dts += av_rescale_q(AV_TIME_BASE,  AV_TIME_BASE_Q,ist->st->time_base);
+//ist->next_dts = ist->dts =out_pkt->dts;
+//ist->next_pts = ist->pts =out_pkt->pts;
+               // ist->next_pts = ist->pts += av_rescale_q(AV_TIME_BASE,  AV_TIME_BASE_Q,ist->st->time_base);
+           // }
+     //}
+     int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
+
+     int64_t now = av_gettime_relative()-ist->start;
+
+     printf("&&&&&&&&&&&_new %d %"PRId64" %"PRId64"  %"PRId64" %d \n",i,pts,now,ist->start,pts-now);
+
+ }*/
+ av_packet_rescale_ts(out_pkt,AV_TIME_BASE_Q,ofmt_ctx->streams[i]->time_base);
+      //直接输出packet 
+     log_packet(ofmt_ctx, out_pkt, "out");
+
+        ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
+        if (ret < 0) {
+            fprintf(stderr, "Error muxing packet\n");
+ //av_packet_unref(pkt);
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+       // av_frame_unref(frame);
+
+
+return ret;
+  //          break;
+        }
+//}  
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+      }
+        continue;
+
+    }else{
+      if (paused_time){
+
+          for (i = 0; i < nb_input_streams; i++) {
+              ist = input_streams[i];
+
+              ist->start+=(av_gettime_relative()-paused_time);
+
+              ist->pts-=av_rescale_q((av_gettime_relative()-paused_time),AV_TIME_BASE_Q,input_streams[i]->st->time_base);
+
+
+          }
+
+          paused_time=0;
+    }
+    
+    }
+
+    /*处理前进和后退*/
+      if(task_handle_process_info->control->seek_time!=0){//&&(end_frame==2000||end_frame==10000)){
+
+        task_handle_process_info->control->current_seek_pos_time=av_rescale_q(input_streams[stream_mapping[0]]->pts, input_streams[stream_mapping[0]]->st->time_base, AV_TIME_BASE_Q);
+               ret=handle_seek(ifmt_ctx,task_handle_process_info->control );
+      //printf("************************* %d %d  %f \n",0,1,0);
+        //task_handle_process_info->control->subtitle_time_offset+=task_handle_process_info->control->current_seek_pos_time/1000;
+        if(ret==0){
+
+          av_log(ifmt_ctx, AV_LOG_INFO, "seek %"PRId64" seconds \n",task_handle_process_info->control->seek_time);
+          for(int i=0;i<nb_output_streams;i++){
+        //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
+        //avcodec_close(output_streams[i]->enc_ctx);
+        //
+        //if(task_handle_process_info->control->seek_time>=){
+             input_streams[i]->seek_offset-=task_handle_process_info->control->seek_time;
+        //}
+             input_streams[i]->start-=(task_handle_process_info->control->seek_time*AV_TIME_BASE);
+//input_streams[i]->start-=(task_handle_process_info->control->current_seek_pos_time+task_handle_process_info->control->seek_time*AV_TIME_BASE);
+input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[i]->st->time_base);
+          }
+
+
+          task_handle_process_info->control->seek_time=0x00;
+
+        }
+
+      }
+
+
+             /*从输入流读取帧，保存到pkt
+         * */
+        ret = av_read_frame(ifmt_ctx, pkt); 
+
+        //uint8_t *sd=av_packet_get_side_data(pkt, AV_PKT_DATA_QUALITY_STATS, NULL);
+        //printf("read frame side data:%d\n",sd); 
+        if (ret == AVERROR(EAGAIN)) {
+            continue;
+        }else if(ret == AVERROR_EOF){
+
+            task_handle_process_info->handled_rate=1.00;
+            goto end;
+          
+        }
+        if (ret < 0) {
+            fprintf(stderr, "Error muxing packet\n");
+            break;
+        }  
+
+        //av_log(ifmt_ctx,AV_LOG_DEBUG," input pkt duration:%"PRId64"\n",pkt->duration);
+  end_frame++;
+
+        in_stream  = ifmt_ctx->streams[pkt->stream_index];
+
+        if (pkt->stream_index >= stream_mapping_size ||
+            stream_mapping[pkt->stream_index] < 0) {
+            av_packet_unref(pkt);
+
+            continue;
+        }
+        if(filter_graph_des->subtitle_time_offset!=task_handle_process_info->control->subtitle_time_offset){
+            filter_graph_des->subtitle_time_offset=task_handle_process_info->control->subtitle_time_offset;
+        }
+
+        if(filter_graph_des->subtitle_charenc!=task_handle_process_info->control->subtitle_charenc){
+            filter_graph_des->subtitle_charenc=task_handle_process_info->control->subtitle_charenc;
+        }
+//
+log_packet(ifmt_ctx, pkt, "in-2");
+/*
+         if(pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts){
+            pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+        }else{
+            pkt->pts=pkt->pts+input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts+2*pkt->duration;
+         //  
+
+        }
+
+       if(pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts){
+
+            pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+        }else{
+            pkt->dts=pkt->dts+input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts+2*pkt->duration;
+//input_streams[stream_mapping[pkt->stream_index]]->start_pts=0;
+
+        }
+//printf("strat_time:%"PRId64" %"PRId64"  \n",ifmt_ctx->start_time,input_streams[stream_mapping[pkt->stream_index]]->start_pts);
+//
+        input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts=pkt->pts;
+        input_streams[stream_mapping[pkt->stream_index]]->origin_stream_dts=pkt->dts;*/
+//log_packet(ifmt_ctx, pkt, "in-2");
+//printf("seek_time:%"PRId64" %"PRId64"  \n",task_handle_process_info->control->seek_time*AV_TIME_BASE,av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+
+      //   pkt->pts=pkt->pts-(input_streams[stream_mapping[pkt->stream_index]]->start_pts+av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+      //
+//input_streams[stream_mapping[pkt->stream_index]]->current_delay_duration=(pkt->pts-pkt->dts)/pkt->duration;
+//pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+
+if(pkt->dts==AV_NOPTS_VALUE){
+
+  pkt->dts=pkt->pts;
+  //out_pkt->dts=pkt->dts;
+
+}else{
+ //pkt->dts=pkt->dts-(input_streams[stream_mapping[pkt->stream_index]]->start_pts+av_rescale_q(task_handle_process_info->control->seek_time*AV_TIME_BASE,AV_TIME_BASE_Q,input_streams[stream_mapping[pkt->stream_index]]->st->time_base));
+ //pkt->dts=pkt->dts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
+}
+
+
+   /*处理控速
+         * */
+        if (rate_emu) {
+            ist = input_streams[stream_mapping[pkt->stream_index]];
+            if (pkt != NULL && pkt->dts != AV_NOPTS_VALUE) {
+                //ist->next_dts = ist->dts = av_rescale_q(pkt->dts, in_stream->time_base, AV_TIME_BASE_Q);
+ist->next_dts = ist->dts =pkt->dts;}
+ist->next_pts = ist->pts =pkt->pts;
+                //ist->next_pts = ist->pts = av_rescale_q(pkt->pts, in_stream->time_base, AV_TIME_BASE_Q);            }
+        }
+
+        /*处理音视频的解码和编码
+         *
+         */
+        if (ifcodec&&(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO||ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_AUDIO||ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE)){
+
+            //处理视频解编码
+            if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO&&(handle_video_codec!=NULL||handle_video_complex_filter!=NULL)){
+
+    //            log_packet(ifmt_ctx, pkt, "in");
+                //已消费帧计数加一
+//task_handle_process_info->control->current_seek_pos_time=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
+                //input_streams[stream_mapping[pkt->stream_index]]->current_pts=pkt->pts;
+                task_handle_process_info->pass_duration=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
+ task_handle_process_info->handled_rate=(float)task_handle_process_info->pass_duration/(float)task_handle_process_info->total_duration;
+              //  av_log(ifmt_ctx,AV_LOG_INFO,"Finished frames: %"PRId64" Total frames:%"PRId64" Finished rate:%f\n",task_handle_process_info->pass_duration,task_handle_process_info->total_duration,task_handle_process_info->handled_rate);
+                //转换time_base,从steam->enc_ctx
+                if (pkt->data!=NULL) {
+
+                /*  if(av_fifo_space(filter_graph_des->packet_queue)<sizeof(PacketDes)){
+
+                    av_fifo_grow(filter_graph_des->packet_queue, sizeof(PacketDes)*10);
+
+                  }*/
+                    //PacketDes pkd;
+
+                   //pkd.pts=pkt->pts;
+                   //pkd.dts=pkt->dts;
+                   //pkd.duration=pkt->duration;
+
+                   //av_fifo_generic_write(filter_graph_des->packet_queue, &pkd, sizeof(pkd), NULL);
+
+                   //av_log(NULL,AV_LOG_DEBUG, "push packet pts:%"PRId64" dts:%"PRId64" size:%d space:%d \n",pkd.pts,pkd.dts,av_fifo_size(filter_graph_des->packet_queue)/sizeof(PacketDes),av_fifo_space(filter_graph_des->packet_queue)/sizeof(PacketDes));
+
+                   av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
+
+                }
+                //处理滤镜 
+                ret=(*handle_video_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,subtitle_ctx,resultsink_ctx,filter_graph_des, output_streams);
+                if (ret == AVERROR(EAGAIN)) {
+
+                    continue;
+                }else if (ret != 0) {
+                    av_log(ifmt_ctx,AV_LOG_ERROR, "handle video codec faile\n");
+
+                    continue;
+                }else{
+
+                    continue;
+                }
+            }
+
+           //处理音频解编码
+           if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_AUDIO&&(handle_audio_codec!=NULL||handle_audio_complex_filter!=NULL)){
+
+   //log_packet(ifmt_ctx, pkt, "in");
+
+               //转换time_base,从steam->enc_ctx
+               if (pkt->data!=NULL) {
+                   av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base);
+               }
+
+               ret=audio_pts=(*handle_audio_complex_filter)(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,audio_pts,output_streams,abuffersrc_ctx,abuffersink_ctx,afilter_graph,afilters_descr );
+
+
+               if (ret == AVERROR(EAGAIN)) {
+                   continue;
+               }else if (ret < 0) {
+                   av_log(ifmt_ctx,AV_LOG_ERROR, "handle audio codec faile\n");
+
+                   continue;
+               }
+               continue;
+
+          }
+          //处理字幕解编码
+          if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE&&(handle_subtitle_codec!=NULL)){
+
+   //log_packet(ifmt_ctx, pkt, "in");
+
+               //转换time_base,从steam->enc_ctx
+               /*if (pkt->data!=NULL) {
+                   av_packet_rescale_ts(pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,AV_TIME_BASE_Q);
+               }
+*/
+               ret=(*handle_subtitle_codec)(pkt,sub_frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,ifmt_ctx,stream_mapping,input_streams,output_streams,filter_graph_des->ass );
+
+
+               if (ret == AVERROR(EAGAIN)) {
+                   continue;
+               }else if (ret < 0) {
+                   av_log(ifmt_ctx,AV_LOG_ERROR, "handle audio codec faile\n");
+
+                   continue;
+               }
+               continue;
+          }
+       
+    }else{
+      out_pkt=pkt;
+      //直接输出packet 
+      ret=simple_interleaved_write_frame_func(pkt,out_pkt,frame,dec_ctx,&enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping,output_streams);
+      if(ret<0){
+          av_log(ofmt_ctx,AV_LOG_ERROR,"interleaved write error:%d",ret);
+          goto end;
+      }
+    }
+        av_packet_unref(pkt);
+        av_packet_unref(out_pkt);
+        av_frame_unref(frame);
+    }
+
+end:
+    av_frame_free(&frame);
+    av_frame_free(&new_logo_frame);
+    av_log(NULL,AV_LOG_INFO,"free frame & new_logo_frame:  \n");
+    if(sub_frame)
+       free_subtitle_frame(sub_frame);
+    
+    av_log(NULL,AV_LOG_INFO,"free sub_frame: \n");
+    avformat_close_input(&ifmt_ctx);
+    avformat_free_context(ifmt_ctx);
+    av_log(NULL,AV_LOG_INFO,"free ifmt_ctx: \n");
+
+    /* close output */
+    if (ofmt_ctx && !(ofmt->flags & AVFMT_NOFILE))
+        avio_closep(&ofmt_ctx->pb);
+    av_write_trailer(ofmt_ctx);
+  
+
+    avformat_free_context(ofmt_ctx);
+    av_log(NULL,AV_LOG_INFO,"free ofmt_ctx: \n");
+ 
+    av_packet_free(&pkt);
+    av_packet_free(&out_pkt);
+    av_log(NULL,AV_LOG_INFO,"free pkt & out_pkt: \n");
+
+    //av_buffer_unref(hw_device_ctx);
+
+    av_log(NULL,AV_LOG_INFO,"free hw_device_ctx \n");
+
+
+    //av_buffer_unref();
+
+    //释放输入流的解码AVCodec_Context
+   
+    av_log(NULL,AV_LOG_INFO,"free dec_ctx total: %d \n",nb_input_streams);
+    for(int i=0;i<nb_input_streams;i++){
+
+       
+        //av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
+
+        
+
+        av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
+
+        //avcodec_close(input_streams[i]->dec_ctx);
+        av_log(NULL,AV_LOG_INFO,"free dec_ctx num:%d \n",i);
+
+        avcodec_free_context(&input_streams[i]->dec_ctx);
+
+    }
+    av_log(NULL,AV_LOG_INFO,"free enc_ctx total: %d \n",nb_output_streams);
+
+    //释放输出流的编码AVCodec_Context
+    for(int i=0;i<nb_output_streams;i++){
+
+        if(&output_streams[i]->enc_ctx->hw_frames_ctx){
+
+            //先释放CUDA的hw_frames_ctx
+            av_log(NULL,AV_LOG_INFO,"free enc_ctx hw_frames_ctx num:%d \n",i);
+            av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
+        }
+        //avcodec_close(output_streams[i]->enc_ctx);
+        //
+        //avcodec_close(output_streams[i]->enc_ctx);
+        //
+        //
+        //output_streams[i]->enc_ctx->hw_device_ctx=NULL;
+if(&output_streams[i]->enc_ctx->hw_device_ctx){
+        //av_buffer_unref(&output_streams[i]->enc_ctx->hw_device_ctx);
+        avcodec_free_context(&output_streams[i]->enc_ctx);
+av_log(NULL,AV_LOG_INFO,"free enc_ctx num:%d \n",i);
+;
+};
+
+    }
+ 
+   //if(filter_graph_des->main_src_hw_frames_ctx&&*(filter_graph_des->main_src_hw_frames_ctx))
+    //   av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
+     //  av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
+
+    
+    if(ret!=AVERROR(ECONNREFUSED)&&0){
+
+        avfilter_free(*mainsrc_ctx);
+        avfilter_free(*logo_ctx);
+        avfilter_free(*subtitle_ctx);
+        avfilter_free(*resultsink_ctx);
+
+
+       
+    }
+
+    av_log(NULL,AV_LOG_INFO,"free mainsrc_ctx & logo_ctx & subtitle_ctx & resultsink_ctx \n");
+
+
+    //释放滤镜
+    //
+    //for(int i=0;i<(*filter_graph)->nb_filters;i++){
+//av_buffer_unref(&(*filter_graph)-filters[i]->hw_device_ctx);
+        //(*filter_graph)->filters[i]->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
+
+//}
+        if(filter_graph){
+        avfilter_graph_free(filter_graph);
+  av_log(NULL,AV_LOG_INFO,"free filter_graph \n");
+        }
+//(*filter_graph)->
+
+ if(filter_graph_des->main_src_hw_frames_ctx&&*(filter_graph_des->main_src_hw_frames_ctx)){
+       av_buffer_unref(filter_graph_des->main_src_hw_frames_ctx);
+       av_log(NULL,AV_LOG_INFO,"free main_src_hw_frames_ctx \n");
+ }
+    
+  
+
+    
+
     //if(afilter_graph)
     avfilter_free(*abuffersrc_ctx);
     av_log(NULL,AV_LOG_INFO,"free abuffersrc_ctx \n");
@@ -3340,9 +4964,9 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
 //AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/home/laoflch/Documents/laoflch-mc-log22.png",&logo_tb,&logo_fr);
 
     TaskHandleProcessInfo *info=task_handle_process_info_alloc();
-    info->video_codec_id=AV_CODEC_ID_H264;
-    info->height=1080;
-    info->width=1920;
+    info->video_codec_id=AV_CODEC_ID_HEVC;
+    //info->height=1080;
+    //info->width=1920;
     //info->bit_rate= 10000000;
     //info->bit_rate= -1;
     //
@@ -3351,13 +4975,13 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->control->subtitle_time_offset=-10000;
     //info->control->subtitle_charenc="UTF-8";
 printf("##################1 %s \n",subtitle_filename);
-    //info->control->seek_time=300;
+    //info->control->seek_time=1415;
 
 
-   // info->control->seek_time=1;
+    //info->control->seek_time=900;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
-    ret=push2rtsp_sub_logo_cuda(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
+    ret=push2rtsp_sub_logo_cuda_2(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
 
 
     //task_handle_process_info_free(info) ;  

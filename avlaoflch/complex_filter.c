@@ -188,7 +188,6 @@ void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char 
  //printf("#######334333##########\n");
     AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
 
-
         printf("%s: pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s time_base:{%d %d} stream_index:%d\n",
            tag,
            av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
@@ -198,8 +197,27 @@ void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char 
            pkt->stream_index);
 
 
-}
 
+}
+void log_packet2(const AVFormatContext *fmt_ctx, const AVPacket *pkt, const char *tag, int64_t start)
+{
+ 
+ 
+    AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
+int64_t current_timestap=av_gettime_relative();
+//printf("#######224222########## %"PRId64"\n",start);
+
+        printf("%s: pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s time_base:{%d %d} stream_index:%d pass_time:%s \n",
+           tag,
+           av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
+           av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
+           av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
+           time_base->den,time_base->num,
+           pkt->stream_index,av_ts2timestr(current_timestap-start, &AV_TIME_BASE_Q));
+
+ //printf("#######334333##########\n");
+
+}
 void add_input_streams( AVFormatContext *ic, int stream_index,int input_stream_index,bool hw,enum AVHWDeviceType type,AVBufferRef *hw_device_ctx,InputStream **input_streams )
 {
     int  ret;
@@ -1487,11 +1505,14 @@ int config_input(AssContext *ass, int format,int w,int h)
     //这个ff_draw_init必须注销，不然会出现ass_frame_render出现空指针的段错误
     //ff_draw_init(&ass->draw, format, ass->alpha ? FF_DRAW_PROCESS_ALPHA : 0);
 //printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d %d %d \n",w,h,FFMIN(INT_MAX, SIZE_MAX)/h,ass->renderer);
+//ass_set_storage_size(ass->renderer, w, h);
     ass_set_frame_size(ass->renderer, w, h);
 
 //printf("@@@@@@@@@@@@@@@@@@@@@@@235 %d %d \n",13,ass->renderer);
 //
 //sleep(5);
+//
+printf("ass size %d %d %d %d  \n",ass->original_h,ass->original_w,h,w);
     if (ass->original_w && ass->original_h) {
         ass_set_aspect_ratio(ass->renderer, (double)w / h,
                              (double)ass->original_w / ass->original_h);
@@ -1503,11 +1524,11 @@ int config_input(AssContext *ass, int format,int w,int h)
         ass_set_storage_size(ass->renderer, w, h);
 #endif
     }
-//ass_set_storage_size(ass->renderer, w, h);
+
 //printf("@@@@@@@@@@@@@@@@@@@@@@@2352 %d %d \n",14,ass->renderer);
 
-    if (ass->shaping != -1)
-        ass_set_shaper(ass->renderer, ass->shaping);
+    //if (ass->shaping != -1)
+     //   ass_set_shaper(ass->renderer, ass->shaping);
 
     return 0;
 }
@@ -6484,11 +6505,13 @@ AVBufferRef **hwdevice =(AVBufferRef **)av_malloc(sizeof(AVBufferRef **));
         return err;
     }
 
-    *hw_device_ctx=*hwdevice;
+    //*hw_device_ctx=*hwdevice;
 
-    ((AVHWFramesContext *)((*hwdevice)->data))->format=AV_PIX_FMT_CUDA;
+    //((AVHWFramesContext *)((*hwdevice)->data))->format=AV_PIX_FMT_CUDA;
 //sleep(60);
     ctx->hw_device_ctx = av_buffer_ref(*hwdevice);
+
+    av_buffer_unref(hwdevice);
 
     //ff_decode_get_hw_frames_ctx(ctx,AV_HWDEVICE_TYPE_CUDA);
 
@@ -6509,7 +6532,7 @@ int set_hwframe_ctx(AVCodecContext *ctx, AVBufferRef *hw_device_ctx)
     frames_ctx->sw_format = ctx->sw_pix_fmt;
     frames_ctx->width     = ctx->width;
     frames_ctx->height    = ctx->height;
-    frames_ctx->initial_pool_size = 20;
+    //frames_ctx->initial_pool_size = 100;
     if ((err = av_hwframe_ctx_init(hw_frames_ref)) < 0) {
         fprintf(stderr, "Failed to initialize VAAPI frame context."
                 "Error code: %s\n",av_err2str(err));
@@ -6745,7 +6768,7 @@ int init_audio_filters(const char *filters_descr,AVFilterContext **buffersink_ct
     }
 
     
-    filter_graph->nb_threads=12;
+    filter_graph->nb_threads=20;
     filter_graph->thread_type=FF_THREAD_FRAME;
     *filter_graph_point=filter_graph;
     /* buffer audio source: the decoded frames from the decoder will be inserted here. */

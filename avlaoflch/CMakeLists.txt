@@ -18,7 +18,7 @@ list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libswresample.so.4)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libx264.so.155)
 list(APPEND FFMPEG_LIB ${FFMPEG_LIB_PREFIX}/libx265.so.179)
 
-list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libass.so.5)
+list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libass.so.9)
 list(APPEND FFMPEG_LIB /lib/x86_64-linux-gnu/libm.so.6)
 
 

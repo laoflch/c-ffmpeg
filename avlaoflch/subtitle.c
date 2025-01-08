@@ -185,6 +185,92 @@ dst=frame->buffer;
         dst += frame->stride;
     }
 }
+int get_all_img_size(image_t **frame,ASS_Image *img){
+
+  ASS_Image *img_tmp=img;
+
+  image_t *frame_tmp;
+  int max_w=0,max_h=0,max_pos_y=0,min_pos_y=0;
+
+  min_pos_y=img_tmp->dst_y;
+  max_pos_y=img_tmp->dst_y;
+
+ printf("pos : x=%d x=%d \n", min_pos_y,max_pos_y);
+  while(img_tmp){
+
+ printf("size pos : w=%d h=%d x=%d x=%d  img->w=%d img->h=%d \n", max_w,max_h,min_pos_y,max_pos_y,img_tmp->w,img_tmp->h);
+    if(img_tmp->w>max_w){
+      max_w=img_tmp->w;
+
+    }
+
+    if(img_tmp->h>max_h){
+      max_h=img_tmp->h;
+
+    }
+
+    if(img_tmp->dst_y<min_pos_y){
+
+      min_pos_y=img_tmp->dst_y;
+
+    }
+    if(img_tmp->dst_y>max_pos_y){
+
+      max_pos_y=img_tmp->dst_y;
+
+    }
+ printf("pos : x=%d x=%d \n", min_pos_y,max_pos_y);
+    img_tmp= img_tmp->next;
+
+  }
+
+  printf("before gen :w=%d h=%d \n", max_w,max_h);
+
+  max_h = max_h + (max_pos_y-min_pos_y);
+  printf("gen image : w=%d h=%d \n", max_w+1,max_h+1);
+  frame_tmp=gen_image(max_w+1, max_h+1);
+  printf("frame_tmp add:%d %d  \n", frame_tmp->buffer,frame_tmp->stride);
+
+  *frame=frame_tmp;
+  return min_pos_y;
+}
+
+static void blend_single_pos(image_t *frame, ASS_Image *img,int pos_y,int pos_x)
+{
+    int x, y;
+    unsigned char opacity = 255 - _a(img->color);
+    unsigned char r = _r(img->color);
+    unsigned char g = _g(img->color);
+    unsigned char b = _b(img->color);
+
+    unsigned char *src;
+    unsigned char *dst;
+
+    src = img->bitmap;
+    dst = frame->buffer + pos_y * frame->stride + pos_x * 4;
+    //dst = frame->buffer + (img->dst_y-(origin_h-frame->height)) * frame->stride + img->dst_x * 4;
+    //dst=frame->buffer;
+
+   //printf("#################### %d %d  \n" ,pos_y ,frame->stride); 
+    for (y = 0; y < img->h; ++y) {
+        for (x = 0; x < img->w; ++x) {
+
+            unsigned k = ((unsigned) src[x]) * opacity / 255;
+//printf("####################2 %d %d  \n" ,x,y); 
+            // possible endianness problems
+            dst[x * 4+3] = (k * opacity ) / 255;
+   
+            dst[x * 4] = (k * b ) / 255;
+            dst[x *  4+ 1] = (k * g ) / 255;
+            dst[x * 4 + 2] = (k * r ) / 255;
+        
+        }
+//printf("####################3 %d %d  \n" ,x,y); 
+        src += img->stride;
+        dst += frame->stride;
+    }
+}
+
 static void blend_single2(image_t * frame, ASS_Image *img)
 {
     int x, y;
@@ -197,10 +283,10 @@ static void blend_single2(image_t * frame, ASS_Image *img)
     unsigned char *dst;
 
     src = img->bitmap;
- //printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d %d\n",img->w,img->stride,img->h,img->dst_x);
+ printf("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$%d %d %d %d %d \n",img->w,img->stride,img->h,img->dst_x,img->dst_y);
     //dst = frame->buffer + (img->dst_y-(origin_h-frame->height)) * frame->stride + img->dst_x * 4;
-//dst = frame->buffer + img->dst_y * frame->stride + img->dst_x * 4;
-dst=frame->buffer;
+//dst = frame->buffer + img->dst_y * frame->stride; //+ img->dst_x * 4;
+dst=frame->buffer;//+(img->dst_y*img->stride);
     for (y = 0; y < img->h; ++y) {
 // printf("qqqqqqqqqqqqqqqqqqqqqqqq2\n");
         for (x = 0; x < img->w; ++x) {
@@ -234,7 +320,27 @@ void blend(image_t * frame, ASS_Image *img)
        // printf("%d images blended\n", cnt);
 }
 
+void blend_pos(image_t **frame, ASS_Image *img,int min_pos_y)
+{
+    int cnt = 0;
+    ASS_Image *new_img=img;
+    while (new_img) {
 
+      if(cnt==4||1){
+        blend_single_pos(*frame, new_img,new_img->dst_y-min_pos_y,((*frame)->width-new_img->w)/2);
+      };
+      ++cnt;
+
+        //old_img=img;
+      new_img = new_img->next;
+//if(old_img)free(old_img);
+
+    }
+
+    //if(img)free(img);
+
+        printf("%d images blended\n", cnt);
+}
 
 char *font_provider_labels[] = {
     [ASS_FONTPROVIDER_NONE]       = "None",
@@ -656,15 +762,15 @@ SubtitleFrame *alloc_subtitle_frame(){
 
 }
 
-image_t * gen_image(int width, int height)
+image_t *gen_image(int width, int height)
 {
-    image_t *img = (image_t *)malloc(sizeof(image_t));
+    image_t *img = (image_t *)malloc(sizeof(image_t *));
     img->width = width;
     img->height = height;
     img->stride = width * 4;
-    img->buffer = calloc(1,img->height*img->stride);
+    img->buffer = calloc(1,height*img->stride);
 
-    printf("memset buffer \n");
+    printf("memset buffer add :%d \n",img->buffer);
     //memset(img->buffer, 0x00, img->stride * img->height);
 
     //for(int i=0;i<img->height*img->stride;i++){
