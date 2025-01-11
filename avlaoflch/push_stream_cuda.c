@@ -196,6 +196,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         ist->max_pts = INT64_MIN;
                //if(rate_emu){
         ist->start=av_gettime_relative();
+//printf("&&&&&&&&&&& start time :%"PRId64" \n",ist->start);
         ist->start_time=av_gettime_relative();
 
         ist->seek_offset=0;
@@ -203,7 +204,11 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         //}
         //
         if(ic->start_time>0){
-            ist->start_pts=av_rescale_q(ic->start_time,AV_TIME_BASE_Q,st->time_base);
+                     ist->start_pts=av_rescale_q(ic->start_time,AV_TIME_BASE_Q,st->time_base);
+                     ist->start_dts=av_rescale_q(ic->start_time,AV_TIME_BASE_Q,st->time_base);
+
+                     printf("start pts:%"PRId64" \n",ist->start_pts);
+
         }else{
             ist->start_pts=0;
         }
@@ -216,12 +221,13 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
           switch(par->codec_id){
             case AV_CODEC_ID_HEVC:
 
-               ist->dec = avcodec_find_decoder_by_name("hevc_cuvid");
-               //可以有hevc 和 hevc_cuvid两种解码器解码，都能使用nv的显卡进行解码，但hevc_cuvid的解码器有bug，对有B帧的视频无法完美解码,解出的帧frame->pict_type都是0。解码有B帧的视频还是要使用"hevc"解码器.
+               ist->dec = avcodec_find_decoder_by_name("hevc");
+               //可以有hevc 和 hevc_cuvid两种解码器解码，都能使用nv的显卡进行解码，但hevc_cuvid的解码器有兼容性较差，hevc解码的兼容性更好，但使用显存要多一些，所以默认建议使用hevc
                //ist->dec = avcodec_find_decoder_by_name("hevc_cuvid");
                break;
 
             case AV_CODEC_ID_H264:
+               //ist->dec = avcodec_find_decoder_by_name("h264");
 
                ist->dec = avcodec_find_decoder_by_name("h264_cuvid");
                break;
@@ -458,8 +464,21 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
    //ost->enc_ctx->active_thread_type=FF_THREAD_SLICE;
     }else if (codec_type== AVMEDIA_TYPE_AUDIO){
 
-//printf("audio codec_id:%d  \n",codec_id);
-        ost->enc = avcodec_find_encoder(codec_id);
+            switch(codec_id){
+            case AV_CODEC_ID_AAC:
+
+               ost->enc = avcodec_find_encoder_by_name("aac");
+
+
+               //ost->enc = avcodec_find_encoder_by_name("libfdk_aac");
+               break;
+
+
+            default:
+               ost->enc = avcodec_find_encoder(codec_id);
+
+          }
+
 
     }else{
         //printf("audio codec_id:%d  \n",codec_id);
@@ -681,6 +700,8 @@ int handle_subtitle2image(AVFrame **frame,int64_t pts,AssContext *ass,AVRational
     int detect_change = 0;
 //if(frame){
     double time_ms = pts * av_q2d(time_base) * 1000;
+
+    printf("subtitle time: %f \n",time_ms);
     //double time_ms=26000;
   //printf("*************889 %d %d %f %f %d %"PRId64"  \n",time_base.num,time_base.den,av_q2d(time_base),time_ms,ass->track->n_events,pts);
    if(ass&&ass->renderer&&ass->track) {
@@ -1007,7 +1028,7 @@ if(-out_pkt->dts>output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts)
 
                        out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
 av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
-                         out_pkt->duration-=64;
+                         //out_pkt->duration-=64;
 //为了避免encodec后的packet的dts出现与上一帧重复的情况，对于当前帧小于或者等于上一帧,用上一帧加一替代。
 if(output_streams[stream_mapping[pkt->stream_index]]->current_dts>=out_pkt->dts){
 
@@ -2866,6 +2887,8 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
       
               //设置编码Context的编码器类型      
               enc_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
+
+              enc_ctx->sample_rate=input_streams[nb_input_streams-1]->dec_ctx->sample_rate;
               //设置编码Context的time_base 
               //enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
               //enc_ctx->time_base.den=24000;
@@ -2945,9 +2968,10 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 //enc_ctx->strict_std_compliance=-2;
                 //rtsp只支持acc音频编码,acc编码的采样格式为flp
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
                 //enc_ctx->bit_rate=384000; 
                 //enc_ctx->bit_rate;
-                enc_ctx->profile=FF_PROFILE_AAC_MAIN;
+                enc_ctx->profile=FF_PROFILE_AAC_LD;
                 enc_ctx->bit_rate_tolerance=100000;
                 //设置音频滤镜描述 
                 AVBPrint arg;
@@ -2961,10 +2985,17 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             }
 
            if(in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
-
+//aac编码参数设置
                av_dict_set(&output_stream->encoder_opts,"aac_pred","1",0);
                av_dict_set(&output_stream->encoder_opts,"aac_coder","2",0);
+              //
+              //libfkd-aac 设置 libfkd-aac只支持s16的采样格式
+//av_dict_set(&output_stream->encoder_opts,"header_period","1024",0);
+//av_dict_set(&output_stream->encoder_opts,"latm","1",0);
 
+//av_dict_set(&output_stream->encoder_opts,"flags","+global_header",0);
+
+//av_dict_set(&output_stream->encoder_opts,"profile","(lc)",0);
 
           // }
            }
@@ -3069,7 +3100,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             for (i = 0; i < nb_input_streams; i++) {
               //for(i=0;i<1;i++){
                 ist = input_streams[i];
-                int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
+                int64_t pts=av_rescale_q(ist->pts-ist->start_pts, ist->st->time_base, AV_TIME_BASE_Q);
                 //此处的当前packet的pts时间要选择dts，不然会出现卡帧情况;
                 int64_t current_timestap=av_gettime_relative();
                 int64_t now = current_timestap-ist->start;
@@ -3782,7 +3813,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     handle_interleaved_write_frame=seek_interleaved_write_frame_func;
     handle_video_complex_filter=all_subtitle_logo_native_cuda_video_codec_func;
     //handle_video_complex_filter=only_dec_enc_native_cuda_video_codec_func; 
-    handle_audio_complex_filter=auto_audio_cuda_codec_func;
+    handle_audio_complex_filter=filter_audio_cuda_codec_func;
     handle_subtitle_codec=simple_subtitle_codec_func;
 
     /*设置ifmt的callback处理函数
@@ -3845,6 +3876,11 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
     av_dict_set(&options, "rtsp_transport", "tcp", 0);
     av_dict_set(&options, "buffer_size", "838860", 0);
     //av_dict_set(&options, "buffer_size", "1024", 0);
+    av_dict_set(&options, "buffer_size", "102400000", 0);
+    av_dict_set(&options, "max_delay", "60000000", 0);
+
+    av_dict_set(&options, "timeout","60000000",0);
+    av_dict_set(&options, "stimeout","60000000",0);
 
   
     stream_mapping_size = ifmt_ctx->nb_streams;
@@ -3998,6 +4034,9 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
               //enc_ctx->height=1616;
                         
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
+ enc_ctx->gop_size=120;
+              
+              enc_ctx->max_b_frames=0;
 
 
 //init_filter_graph_func(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
@@ -4047,9 +4086,13 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
 
                 av_log(NULL,AV_LOG_DEBUG,"audio stream time base:{%d %d} sample_rate:%d channel_layout:%d channels:%d\n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->sample_rate,enc_ctx->channel_layout,enc_ctx->channels);
-                //enc_ctx->strict_std_compliance=-2;
-                //rtsp只支持acc音频编码,acc编码的采样格式为flp
+                 //rtsp只支持acc音频编码,acc编码的采样格式为flp
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
+                //enc_ctx->bit_rate=384000; 
+                //enc_ctx->bit_rate;
+                enc_ctx->profile=FF_PROFILE_AAC_MAIN;
+                enc_ctx->bit_rate_tolerance=100000;//该参数能够优化音频编码速度和延迟
                 //设置音频滤镜描述 
                 AVBPrint arg;
                 av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
@@ -4060,6 +4103,22 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             }else{
                 continue;
             }
+
+           if(in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+//aac编码参数设置
+               av_dict_set(&output_stream->encoder_opts,"aac_pred","1",0);
+               av_dict_set(&output_stream->encoder_opts,"aac_coder","2",0);
+              //
+              //libfkd-aac 设置 libfkd-aac只支持s16的采样格式
+//av_dict_set(&output_stream->encoder_opts,"header_period","1024",0);
+//av_dict_set(&output_stream->encoder_opts,"latm","1",0);
+
+//av_dict_set(&output_stream->encoder_opts,"flags","+global_header",0);
+
+//av_dict_set(&output_stream->encoder_opts,"profile","(lc)",0);
+
+          // }
+           }
 
 
 
@@ -4162,7 +4221,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             for (i = 0; i < nb_input_streams; i++) {
             //  for(i=0;i<1;i++){
                 ist = input_streams[i];
-                int64_t pts=av_rescale_q(ist->pts, ist->st->time_base, AV_TIME_BASE_Q);
+                int64_t pts=av_rescale_q(ist->dts, ist->st->time_base, AV_TIME_BASE_Q);
                 //此处的当前packet的pts时间要选择dts，不然会出现卡帧情况;
                 int64_t current_timestap=av_gettime_relative();
                 int64_t now = current_timestap-ist->start;
@@ -4172,7 +4231,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=1.0;//-1 - 1
+int cache_time=5.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
                 if (pts > now+AV_TIME_BASE*cache_time){
                   
@@ -4295,7 +4354,7 @@ return ret;
         if(ret==0){
 
           av_log(ifmt_ctx, AV_LOG_INFO, "seek %"PRId64" seconds \n",task_handle_process_info->control->seek_time);
-          for(int i=0;i<nb_output_streams;i++){
+          for(int i=0;i<nb_input_streams;i++){
         //av_buffer_unref(&output_streams[i]->enc_ctx->hw_frames_ctx);
         //avcodec_close(output_streams[i]->enc_ctx);
         //
@@ -4354,6 +4413,13 @@ input_streams[i]->pts+=av_rescale_q(task_handle_process_info->control->seek_time
         }
 //
 log_packet(ifmt_ctx, pkt, "in-2");
+
+if(input_streams[stream_mapping[pkt->stream_index]]->start_dts>0){
+
+      pkt->pts-=input_streams[stream_mapping[pkt->stream_index]]->start_dts;
+      pkt->dts-=input_streams[stream_mapping[pkt->stream_index]]->start_dts;
+}
+log_packet(ifmt_ctx, pkt, "in-2-2");
 /*
          if(pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts>input_streams[stream_mapping[pkt->stream_index]]->origin_stream_pts){
             pkt->pts=pkt->pts-input_streams[stream_mapping[pkt->stream_index]]->start_pts;
@@ -4493,6 +4559,7 @@ ist->next_pts = ist->pts =pkt->pts;
 
 
                if (ret == AVERROR(EAGAIN)) {
+
                    continue;
                }else if (ret < 0) {
                    av_log(ifmt_ctx,AV_LOG_ERROR, "handle audio codec faile\n");
@@ -4973,15 +5040,15 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->audio_channels=6;
     //info->control=av_mallocz(sizeof(TaskHandleProcessControl));
     //info->control->subtitle_time_offset=-10000;
-    //info->control->subtitle_charenc="UTF-8";
+    info->control->subtitle_charenc="UTF-8";
 printf("##################1 %s \n",subtitle_filename);
     //info->control->seek_time=1415;
 
 
-    //info->control->seek_time=900;
+    info->control->seek_time=2760;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
-    ret=push2rtsp_sub_logo_cuda_2(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
+    ret=push2rtsp_sub_logo_cuda(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
 
 
     //task_handle_process_info_free(info) ;  

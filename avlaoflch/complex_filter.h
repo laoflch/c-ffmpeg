@@ -199,6 +199,7 @@ typedef struct InputStream {
     int64_t       next_pts;  ///< synthetic pts for the next decode frame (in AV_TIME_BASE units)
     int64_t       pts;       ///< current pts of the decoded frame  (in AV_TIME_BASE units)
     int64_t       start_pts;
+    int64_t       start_dts;
     int64_t       start_time;
     int64_t       current_pts;
     //double           current_delay_duration;

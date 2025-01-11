@@ -695,10 +695,17 @@ int simple_subtitle_codec_func(AVPacket *pkt,SubtitleFrame *subtitle_frame,AVCod
         
 
         }else if (subtitle.num_rects==0){
+ //printf("3 pts:%"PRId64" pkt pts:%"PRId64" start:%"PRId64" end:%"PRId64"\n",subtitle.pts,pkt->pts,subtitle.start_display_time,subtitle.end_display_time);
 
-            subtitle_frame->pts=subtitle.pts;
-            subtitle_frame->duration=subtitle.end_display_time-subtitle.start_display_time;
-            //if(subtitle_frame->sub_frame){
+           /* if(subtitle.pts<=0){
+                subtitle_frame->pts=av_rescale_q(pkt->pts, fmt_ctx->streams[pkt->stream_index]->time_base, input_streams[stream_mapping[pkt->stream_index]]->dec_ctx->time_base);
+                subtitle_frame->duration=av_rescale_q(pkt->duration, fmt_ctx->streams[pkt->stream_index]->time_base, input_streams[stream_mapping[pkt->stream_index]]->dec_ctx->time_base);
+
+            }else{*/
+
+                subtitle_frame->pts=subtitle.pts;
+                subtitle_frame->duration=subtitle.end_display_time-subtitle.start_display_time;
+           // }      //if(subtitle_frame->sub_frame){
                 av_frame_unref(subtitle_frame->sub_frame);
                 //av_frame_free(&(subtitle_frame->sub_frame));
                 //subtitle_frame->sub_frame=NULL;
