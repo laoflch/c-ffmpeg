@@ -221,9 +221,9 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
           switch(par->codec_id){
             case AV_CODEC_ID_HEVC:
 
-               ist->dec = avcodec_find_decoder_by_name("hevc");
+               //ist->dec = avcodec_find_decoder_by_name("hevc");
                //可以有hevc 和 hevc_cuvid两种解码器解码，都能使用nv的显卡进行解码，但hevc_cuvid的解码器有兼容性较差，hevc解码的兼容性更好，但使用显存要多一些，所以默认建议使用hevc
-               //ist->dec = avcodec_find_decoder_by_name("hevc_cuvid");
+               ist->dec = avcodec_find_decoder_by_name("hevc_cuvid");
                break;
 
             case AV_CODEC_ID_H264:
@@ -1268,8 +1268,9 @@ int all_subtitle_logo_native_cuda_video_codec_func(AVPacket *pkt,AVPacket *out_p
                    return -1;
                }
 
-               filter_graph_point->nb_threads=12;
-               filter_graph_point->thread_type=FF_THREAD_SLICE;
+               filter_graph_point->nb_threads=20;
+               filter_graph_point->thread_type=FF_THREAD_FRAME;
+                 ;
               /* 
                AVBufferRef *hwdevice;
 
@@ -4090,9 +4091,16 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
                 //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
                 //enc_ctx->bit_rate=384000; 
-                //enc_ctx->bit_rate;
+                enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
                 enc_ctx->profile=FF_PROFILE_AAC_MAIN;
-                enc_ctx->bit_rate_tolerance=100000;//该参数能够优化音频编码速度和延迟
+
+                //音频设置VBR,对于dts和trueHD等多声道音频，建议设置动态码率,提升音频编码速度导致的卡顿
+                
+                enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                enc_ctx->qmin=0;
+                enc_ctx->qmax=5;
+                
+                //enc_ctx->bit_rate_tolerance=100000;//该参数能够优化音频编码速度和延迟
                 //设置音频滤镜描述 
                 AVBPrint arg;
                 av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
@@ -4231,7 +4239,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=5.0;//-1 - 1
+int cache_time=20.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
                 if (pts > now+AV_TIME_BASE*cache_time){
                   
@@ -5045,7 +5053,7 @@ printf("##################1 %s \n",subtitle_filename);
     //info->control->seek_time=1415;
 
 
-    info->control->seek_time=2760;
+   // info->control->seek_time=2760;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo_cuda(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
