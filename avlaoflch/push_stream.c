@@ -585,6 +585,13 @@ int seek_interleaved_write_frame_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *f
         //out_pkt->dts=out_pkt->pts-(pkt->pts-pkt->dts);
          log_packet2(ofmt_ctx, out_pkt, "out",ist->start);
 
+         //int64_t interval_dts_pts=out_pkt->pts-out_pkt->dts;
+
+         //out_pkt->dts=av_rescale_q(av_gettime_relative(),AV_TIME_BASE_Q,  out_stream->time_base);
+
+         //out_pkt->pts=out_pkt->dts+interval_dts_pts;
+
+
         ret = av_interleaved_write_frame(ofmt_ctx, out_pkt);
         if (ret < 0) {
             fprintf(stderr, "Error muxing packet\n");

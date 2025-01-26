@@ -428,7 +428,7 @@ OutputStream *add_output_stream_cuda(AVFormatContext *oc,  int output_stream_ind
     ost->audio_fifo=NULL;
     ost->current_dts=-1;
 
-    ost->min_pts_dts=-1;
+    ost->min_pts_dts=0;
 
     //if(codec_type== AVMEDIA_TYPE_AUDIO&&if_audio_fifo){
     //ost->audio_fifo=av_mallocz(sizeof(AVAudioFifo *));
@@ -443,6 +443,7 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
           switch(codec_id){
             case AV_CODEC_ID_HEVC:
 
+               //ost->enc = avcodec_find_encoder_by_name("libx265");
 
 
                ost->enc = avcodec_find_encoder_by_name("hevc_nvenc");
@@ -1879,7 +1880,7 @@ av_frame_unref(frame);
                       //处理encodec后的packet的dts是负数，且远小于pts的情况，如：pts为正数，而dts是-3003的情况
                        if(out_pkt->dts<0){
 
-                         if(output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts==-1)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;
+                         if(output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts==0)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;
 
 if(out_pkt->pts-out_pkt->dts<output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts)output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts=out_pkt->pts-out_pkt->dts;
 
@@ -1888,7 +1889,10 @@ if(out_pkt->pts-out_pkt->dts<output_streams[stream_mapping[pkt->stream_index]]->
                          out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts;
                        out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
 //av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+ printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
 av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+out_pkt->duration-=1;
+
 //为了避免encodec后的packet的dts出现与上一帧重复的情况，对于当前帧小于或者等于上一帧,用上一帧加一替代。
 if(output_streams[stream_mapping[pkt->stream_index]]->current_dts>=out_pkt->dts){
 
@@ -2168,6 +2172,7 @@ printf("origin_s_pts:%"PRId64" out pts:%"PRId64" in pts:%"PRId64" \n",origin_s_p
 //}
 
      // av_packet_rescale_ts(out_pkt,output_streams[stream_mapping[pkt->stream_index]]->enc_ctx->time_base,input_streams[stream_mapping[pkt->stream_index]]->st->time_base);
+     av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
     //输出流
 
     ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
@@ -3111,7 +3116,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=20.0;//-1 - 1
+int cache_time=5.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
   //              if (pts > now-AV_TIME_BASE*cache_time&&i==0){
                   
@@ -3639,7 +3644,7 @@ int push2rtsp_sub_logo_cuda(const char *video_file_path, const int video_index, 
 
     SubtitleFrame *sub_frame=NULL;
 
-printf("&&&&&&&&&&&&&&&&&&&&&&&&&&\n");
+//printf("&&&&&&&&&&&&&&&&&&&&&&&&&&\n");
   
 
     /*初始化输入ForamtContext
@@ -3874,15 +3879,41 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
      */ 
     AVDictionary* options = NULL;
 
-    av_dict_set(&options, "rtsp_transport", "tcp", 0);
-    av_dict_set(&options, "buffer_size", "838860", 0);
+
+    if(task_handle_process_info&&task_handle_process_info->push_rtsp_para&&task_handle_process_info->push_rtsp_para->rtsp_transport){
+        av_dict_set(&options, "rtsp_transport",task_handle_process_info->push_rtsp_para->rtsp_transport, 0);
+    }else{
+        av_dict_set(&options, "rtsp_transport", "tcp", 0);
+
+    }
+
+       //av_dict_set(&options, "buffer_size", "838860", 0);
     //av_dict_set(&options, "buffer_size", "1024", 0);
-    av_dict_set(&options, "buffer_size", "102400000", 0);
-    av_dict_set(&options, "max_delay", "60000000", 0);
+    if(task_handle_process_info&&task_handle_process_info->push_rtsp_para&&task_handle_process_info->push_rtsp_para->buffer_size){
+        av_dict_set(&options, "buffer_size",task_handle_process_info->push_rtsp_para->buffer_size, 0);
+    }else{
+        av_dict_set(&options, "buffer_size", "102400000", 0);
+    }
 
-    av_dict_set(&options, "timeout","60000000",0);
-    av_dict_set(&options, "stimeout","60000000",0);
+    if(task_handle_process_info&&task_handle_process_info->push_rtsp_para&&task_handle_process_info->push_rtsp_para->max_delay){
+        av_dict_set(&options, "max_delay",task_handle_process_info->push_rtsp_para->max_delay, 0);
+    }else{
+        av_dict_set(&options, "max_delay", "60000000", 0);
+    }
 
+    if(task_handle_process_info&&task_handle_process_info->push_rtsp_para&&task_handle_process_info->push_rtsp_para->timeout){
+        av_dict_set(&options, "timeout",task_handle_process_info->push_rtsp_para->timeout, 0);
+    }else{
+        av_dict_set(&options, "timeout","60000000",0);
+    }
+
+    if(task_handle_process_info&&task_handle_process_info->push_rtsp_para&&task_handle_process_info->push_rtsp_para->stimeout){
+        av_dict_set(&options, "stimeout",task_handle_process_info->push_rtsp_para->stimeout, 0);
+    }else{
+        av_dict_set(&options, "stimeout","60000000",0);
+    }
+
+        
   
     stream_mapping_size = ifmt_ctx->nb_streams;
 
@@ -3910,6 +3941,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
         GROW_ARRAY(input_streams, nb_input_streams);
 
         av_log(NULL,AV_LOG_DEBUG,"i: %d nb_input_streams %d \n",i,nb_input_streams);
+ //printf("AVstream1 time_base:{%d %d} \n", ifmt_ctx->streams[i]->time_base.den,ifmt_ctx->streams[i]->time_base.num);
                //增加输入流
         add_input_stream_cuda(ifmt_ctx,i,nb_input_streams-1,if_hw,type,hw_device_ctx,input_streams);
         
@@ -3942,6 +3974,9 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 ret = AVERROR_UNKNOWN;
                 goto end;
             }
+
+
+         
 
         
         /*进入解编码处理
@@ -3994,28 +4029,37 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
               task_handle_process_info->total_duration=ifmt_ctx->duration;
 
               task_handle_process_info->pass_duration=0;
-
+                 
               //提取输入流的比特率
-              if(task_handle_process_info->bit_rate==0){
+              //if(task_handle_process_info->bit_rate==0){
+//音频设置VBR,对于dts和trueHD等多声道音频，建议设置动态码率,提升音频编码速度导致的卡顿
+                
+                 // enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                  //enc_ctx->qmin=10;
+                  //enc_ctx->qmax=10;
 
-                  task_handle_process_info->bit_rate=ifmt_ctx->bit_rate;
+                 // task_handle_process_info->bit_rate=ifmt_ctx->bit_rate;
                     
 
-                  enc_ctx->bit_rate=task_handle_process_info->bit_rate;
-              }else if (task_handle_process_info->bit_rate>0){
+                  //enc_ctx->bit_rate=task_handle_process_info->bit_rate;
+              //}else if (task_handle_process_info->bit_rate>0){
 
-                  enc_ctx->bit_rate=task_handle_process_info->bit_rate;
+                  //enc_ctx->bit_rate=task_handle_process_info->bit_rate;
 
-              }
-      
+              //}
+       //enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+        //          enc_ctx->qmin=31;
+         //         enc_ctx->qmax=31;
+
               //设置编码Context的编码器类型      
               enc_ctx->codec_type = AVMEDIA_TYPE_VIDEO;
               //设置编码Context的time_base 
               //enc_ctx->time_base = input_streams[nb_input_streams-1]->dec_ctx->time_base;
               //enc_ctx->time_base.den=24000;
               //enc_ctx->time_base.num=1001;   
-              enc_ctx->time_base=av_inv_q(input_streams[nb_input_streams-1]->dec_ctx->framerate) ;  
-              av_log(NULL,AV_LOG_DEBUG,"video stream time base:{%d %d} bitrate :%d \n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->bit_rate);
+              //enc_ctx->time_base=av_inv_q(input_streams[nb_input_streams-1]->dec_ctx->framerate) ;  
+             enc_ctx->time_base=input_streams[nb_input_streams-1]->dec_ctx->time_base;
+             av_log(NULL,AV_LOG_DEBUG,"video stream time base:{%d %d} bitrate :%d \n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->bit_rate);
               //设置编码Context的尺寸 
 
               if(task_handle_process_info->width>0&&task_handle_process_info->height>0){
@@ -4033,12 +4077,30 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
               //enc_ctx->width=3840;
               //enc_ctx->height=1616;
+              //
+              //
+              if(task_handle_process_info&&task_handle_process_info->encodec_para&&(task_handle_process_info->encodec_para->vq_min>0||task_handle_process_info->encodec_para->vq_max>0)){
+                  //enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+                  enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                  enc_ctx->qmin=task_handle_process_info->encodec_para->vq_min;
+                  enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+
+              }
+
                         
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
- enc_ctx->gop_size=120;
-              
-              enc_ctx->max_b_frames=0;
 
+              if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_gop_size){
+                  enc_ctx->gop_size=task_handle_process_info->encodec_para->v_gop_size;
+              }
+
+              if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_max_b_frames){
+                  enc_ctx->gop_size=task_handle_process_info->encodec_para->v_max_b_frames;
+              }
+
+              
+  //            enc_ctx->max_b_frames=5;
+ 
 
 //init_filter_graph_func(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
  
@@ -4095,10 +4157,17 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 enc_ctx->profile=FF_PROFILE_AAC_MAIN;
 
                 //音频设置VBR,对于dts和trueHD等多声道音频，建议设置动态码率,提升音频编码速度导致的卡顿
-                
-                enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
-                enc_ctx->qmin=0;
-                enc_ctx->qmax=5;
+                if(task_handle_process_info&&task_handle_process_info->encodec_para&&(task_handle_process_info->encodec_para->aq_min>0||task_handle_process_info->encodec_para->aq_max>0)){
+                  //enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+                  enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                  enc_ctx->qmin=task_handle_process_info->encodec_para->aq_min;
+                  enc_ctx->qmax=task_handle_process_info->encodec_para->aq_max;
+
+              }
+
+              //  enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+               // enc_ctx->qmin=0;
+                //enc_ctx->qmax=3;
                 
                 //enc_ctx->bit_rate_tolerance=100000;//该参数能够优化音频编码速度和延迟
                 //设置音频滤镜描述 
@@ -4140,8 +4209,14 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                } 
 
 //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
+                 //av_dict_set(&output_stream->encoder_opts,"preset","ultrafast",0);
+                 //av_dict_set(&output_stream->encoder_opts,"tune","zero-latency",0);
 
-               av_dict_set(&output_stream->encoder_opts,"preset","p2",0);
+
+
+               av_dict_set(&output_stream->encoder_opts,"preset","p1",0);
+               //av_dict_set(&output_stream->encoder_opts,"tune","ull",0);
+
 
                //nvenc的preset不宜过低，过低也将出现视频卡顿
 
@@ -4164,7 +4239,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                  goto end;
             }
 
-         
+          //  out_stream->time_base=AV_TIME_BASE_Q;
 
 
         }}else{
@@ -4179,24 +4254,37 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
         } 
         
     }}
+
+  printf("AVstream time_base:{%d %d} \n", ofmt_ctx->streams[1]->time_base.den,ofmt_ctx->streams[1]->time_base.num);
+
+
     //打印输出流信息
     av_dump_format(ofmt_ctx, 0, rtsp_push_path, 1);
     //打开输出流文件
     //
- 
+
     if (!(ofmt->flags & AVFMT_NOFILE)) {
         ret = avio_open(&ofmt_ctx->pb, rtsp_push_path, AVIO_FLAG_WRITE);
         if (ret < 0) {
             av_log(ofmt_ctx,AV_LOG_ERROR, "Could not open output file '%s'", rtsp_push_path);
             goto end;
         }
-    }
+
+        //ofmt_ctx->streams[1]->time_base=AV_TIME_BASE_Q;
+
+           }
+
     //写入流头部信息
     ret = avformat_write_header(ofmt_ctx, &options);
     if (ret < 0) {
         av_log(ofmt_ctx,AV_LOG_ERROR, "Error occurred when opening output file %d \n", ret);
         goto end;
     }
+
+    ofmt_ctx->streams[0]->time_base=ifmt_ctx->streams[0]->time_base;
+    ofmt_ctx->streams[1]->time_base=ifmt_ctx->streams[1]->time_base;
+ printf("AVstream time_base:{%d %d} \n", ofmt_ctx->streams[0]->time_base.den,ofmt_ctx->streams[0]->time_base.num);
+  printf("AVstream time_base:{%d %d} \n", ofmt_ctx->streams[1]->time_base.den,ofmt_ctx->streams[1]->time_base.num);
     /*完成编解码context设置,开始读取packet，并逐packet处理
      */
 
@@ -4239,7 +4327,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
 //if(i==0){
 //控设置视频流缓存的时间,高帧率视频需要调大设置缓冲时间
-int cache_time=20.0;//-1 - 1
+int cache_time=0.0;//-1 - 1
   //TS设置缓冲1个AV_TIME_BASE
                 if (pts > now+AV_TIME_BASE*cache_time){
                   
@@ -5053,7 +5141,11 @@ printf("##################1 %s \n",subtitle_filename);
     //info->control->seek_time=1415;
 
 
-   // info->control->seek_time=2760;
+    //info->control->seek_time=1000;
+    info->encodec_para->v_gop_size=300;
+    info->encodec_para->v_max_b_frames=5;
+    info->encodec_para->aq_min=0;
+    info->encodec_para->aq_max=3;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo_cuda(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);

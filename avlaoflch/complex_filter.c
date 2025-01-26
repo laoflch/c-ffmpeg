@@ -156,15 +156,22 @@ TaskHandleProcessInfo *task_handle_process_info_alloc(){
     info->audio_channel_layout=0;
 
     TaskHandleProcessControl *tc= av_malloc(sizeof(*tc));
+    EncodecParameter *ep= av_malloc(sizeof(*ep));
+    PushRtspParameter *prp=av_malloc(sizeof(*prp));
 
 
 
     //info->control=av_mallocz(sizeof(*TaskHandleProcessControl));
     info->control=tc;
+    info->encodec_para=ep;
+    info->push_rtsp_para=prp;
     info->control->task_cancel=false;
     info->control->seek_time=0;
     info->control->task_pause=false;
     info->control->current_seek_pos_time=0;
+
+
+    
 
     if (!info)
         return NULL;

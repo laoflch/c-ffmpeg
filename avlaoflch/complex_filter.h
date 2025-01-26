@@ -436,6 +436,37 @@ typedef struct TaskHandleProcessControl {
 } TaskHandleProcessControl;
 
 
+typedef struct EncodecParameter {
+    
+     /*input process info*/
+     int64_t bit_rate; 
+     //enum  code_id;
+     enum AVCodecID video_codec_id;
+
+     int width,height;    
+     int vq_min,vq_max;
+     int v_gop_size,v_max_b_frames;
+     char *v_preset;
+
+     int audio_channels;
+     uint64_t audio_channel_layout;
+     enum AVCodecID audio_codec_id;
+     int aq_min,aq_max;
+
+} EncodecParameter;
+
+typedef struct PushRtspParameter {
+    
+     char *rtsp_transport;
+     char *buffer_size;
+     char *max_delay;
+
+     char *timeout;
+     char *stimeout;
+
+} PushRtspParameter;
+
+
 typedef struct TaskHandleProcessInfo {
 
 
@@ -450,6 +481,10 @@ typedef struct TaskHandleProcessInfo {
      int audio_channels;
      uint64_t audio_channel_layout;
      enum AVCodecID audio_codec_id;
+
+     EncodecParameter *encodec_para;
+
+     PushRtspParameter *push_rtsp_para;
       
      TaskHandleProcessControl *control;
 
