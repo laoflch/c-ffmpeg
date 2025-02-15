@@ -4117,14 +4117,17 @@ av_cold int init_ass(AssContext *ass)
 
     /* Initialize fonts */
     ass_set_fonts(ass->renderer, NULL, "sans-serif", ASS_FONTPROVIDER_AUTODETECT, NULL, 1);
-//printf("set fonts:%d \n",ass->renderer);
+
  ass->track = ass_read_file(ass->library, ass->filename, NULL);
-    if (!ass->track) {
+ 
+//printf("set fonts:%d \n",ass->renderer);
+ if (!ass->track) {
         av_log(ass, AV_LOG_ERROR,
                "Could not create a libass track when reading file '%s'\n",
                ass->filename);
         return AVERROR(EINVAL);
     }
+
 
        return 0;
 }
