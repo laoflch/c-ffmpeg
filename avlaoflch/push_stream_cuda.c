@@ -5162,17 +5162,18 @@ AVFrame *logo_frame = get_frame_from_jpeg_or_png_file2("/workspace/ffmpeg/FFmpeg
     //info->audio_channels=6;
     //info->control=av_mallocz(sizeof(TaskHandleProcessControl));
     info->control->subtitle_time_offset=0;
-    info->control->subtitle_charenc="UTF-16";
+    info->control->subtitle_charenc="UTF-8";
 printf("##################1 %s \n",subtitle_filename);
     //info->control->seek_time=1415;
 
 
     //info->control->seek_time=1000;
-    info->encodec_para->v_gop_size=300;
-    info->encodec_para->v_max_b_frames=5;
+    info->encodec_para->v_gop_size=120;
+    info->encodec_para->v_preset="p1";
+    info->encodec_para->v_max_b_frames=0;
     info->encodec_para->bit_rate=600000;
-    info->encodec_para->aq_min=0;
-    info->encodec_para->aq_max=3;
+    //info->encodec_para->aq_min=3;
+    //info->encodec_para->aq_max=5;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo_cuda(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);

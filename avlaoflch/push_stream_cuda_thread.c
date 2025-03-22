@@ -48,6 +48,10 @@
 #define AB(c)  (((c)>>8) &0xFF)
 #define AA(c)  ((0xFF-(c)) &0xFF)
 
+#define DEFAULT_AUDIO_THREADS 1 
+#define DEFAULT_VIDEO_THREADS 1 
+
+
 
 static pthread_mutex_t out_lock;
 
@@ -545,10 +549,10 @@ printf("codec_id:%d hevc:%d h264:%d \n",codec_id,AV_CODEC_ID_HEVC,AV_CODEC_ID_H2
             switch(codec_id){
             case AV_CODEC_ID_AAC:
 
-               ost->enc = avcodec_find_encoder_by_name("aac");
+               //ost->enc = avcodec_find_encoder_by_name("aac");
 
 
-               //ost->enc = avcodec_find_encoder_by_name("libfdk_aac");
+               ost->enc = avcodec_find_encoder_by_name("libfdk_aac");
                break;
 
 
@@ -2652,10 +2656,10 @@ static void  filter_audio_codec_thread_func(HandleAudioThreadArg *arg){
     //av_thread_message_flush(*video_pkt_queue);
 
     while(1){
-    printf("#################################---3 %d  %d\n",*audio_pkt_queue,pkt);
+    //printf("#################################---3 %d  %d\n",*audio_pkt_queue,pkt);
 
     ret=av_thread_message_queue_recv(*audio_pkt_queue, &pkt, 0);
- printf("#################################---4 %d\n");
+ //printf("#################################---4 %d\n");
 
     if(ret<0){
 
@@ -2666,7 +2670,7 @@ static void  filter_audio_codec_thread_func(HandleAudioThreadArg *arg){
 // pkt=*pkt_point;
  //av_packet_move_ref(pkt,  (AVPacket *)(*pkt_point)) ;
  //av_packet_free(pkt_point);
-     printf("#################################33 %"PRId64" %d\n",pkt->dts,ret);
+     //printf("#################################33 %"PRId64" %d\n",pkt->dts,ret);
 
         av_log(NULL,AV_LOG_INFO,"audio pkt receive from queue :%"PRId64" %d \n",pkt->dts,pkt);
 
@@ -2720,10 +2724,10 @@ static void  filter_audio_codec_thread_func(HandleAudioThreadArg *arg){
 
     while (1) {
 
-printf("#################################34-a1 %d  \n",ret);
+//printf("#################################34-a1 %d  \n",ret);
         ret = avcodec_receive_frame(dec_ctx, frame);
 
- printf("#################################34-a2 %d  \n",ret);
+ //printf("#################################34-a2 %d  \n",ret);
  //printf("in sample fmt:%d\n",frame->format);
       if (ret == AVERROR(EAGAIN)) {
  av_packet_unref(pkt);
@@ -2780,9 +2784,9 @@ printf("#################################34-a1 %d  \n",ret);
                         av_log(NULL, AV_LOG_ERROR, "Error while feeding the audio filtergraph\n");
                                          }
 
-printf("#################################342-a1 %d  \n",dec_ctx);
+//printf("#################################342-a1 %d  \n",dec_ctx);
 
- printf("#################################342-a2 %d  \n",pkt);
+ //printf("#################################342-a2 %d  \n",pkt);
 //s_pts+=frame->nb_samples;
 //s_pts=origin_pkt_pts;
 //printf("s_pts w:%"PRId64"\n" ,s_pts);
@@ -2847,7 +2851,7 @@ printf("#################################342-a1 %d  \n",dec_ctx);
  if (out_pkt->data!=NULL) {
 
 
-   printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,0,pkt->duration);
+   //printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,0,pkt->duration);
 
  
 pkt->stream_index=s_stream_index;
@@ -2865,7 +2869,7 @@ pkt->stream_index=s_stream_index;
 //out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
 
       out_pkt->duration=pkt->duration;
-    printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,0,pkt->duration);
+    //printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,0,pkt->duration);
  //   } else if(if_recreate_pts){
   //  out_pkt->pts=s_pts+out_pkt->duration;
    // }else {
@@ -4827,11 +4831,23 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
 
               //enc_ctx->width=3840;
               //enc_ctx->height=1616;
-                      
+              if(task_handle_process_info&&task_handle_process_info->encodec_para&&(task_handle_process_info->encodec_para->vq_min>0||task_handle_process_info->encodec_para->vq_max>0)){
+                  //enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+                  enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                  enc_ctx->qmin=task_handle_process_info->encodec_para->vq_min;
+                  enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+
+              }
+
               enc_ctx->sample_aspect_ratio = input_streams[nb_input_streams-1]->dec_ctx->sample_aspect_ratio;
-              enc_ctx->gop_size=120;
-              
-              enc_ctx->max_b_frames=0;
+             if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_gop_size){
+                  enc_ctx->gop_size=task_handle_process_info->encodec_para->v_gop_size;
+              }
+
+              if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_max_b_frames){
+                  enc_ctx->gop_size=task_handle_process_info->encodec_para->v_max_b_frames;
+              }
+
 
 //init_filter_graph_func(pkt,out_pkt,frame,input_streams[stream_mapping[pkt->stream_index]]->dec_ctx,&output_streams[stream_mapping[pkt->stream_index]]->enc_ctx,ifmt_ctx,ofmt_ctx,stream_mapping[pkt->stream_index],handle_interleaved_write_frame,input_streams,stream_mapping,filter_graph,mainsrc_ctx,logo_ctx,resultsink_ctx,filter_graph_des, output_streams);
  
@@ -4882,13 +4898,32 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 av_log(NULL,AV_LOG_DEBUG,"audio stream time base:{%d %d} sample_rate:%d channel_layout:%d channels:%d\n",enc_ctx->time_base.den,enc_ctx->time_base.num,enc_ctx->sample_rate,enc_ctx->channel_layout,enc_ctx->channels);
                 //enc_ctx->strict_std_compliance=-2;
                 //rtsp只支持acc音频编码,acc编码的采样格式为flp
-                enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                if(!strcmp(enc_ctx->codec->name,"aac")){
+//aac编码参数设置
+                    enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+                }else if(!strcmp(enc_ctx->codec->name,"libfdk_aac")){
+                    enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
+
+
+
+                }
+
+                //enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
                 //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
                 //enc_ctx->bit_rate=384000; 
-                enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
+                //enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
 
-                enc_ctx->profile=FF_PROFILE_AAC_MAIN;
+                //enc_ctx->profile=FF_PROFILE_AAC_MAIN;
                 //enc_ctx->bit_rate_tolerance=100000;
+               //音频设置VBR,对于dts和trueHD等多声道音频，建议设置动态码率,提升音频编码速度导致的卡顿
+                if(task_handle_process_info&&task_handle_process_info->encodec_para&&(task_handle_process_info->encodec_para->aq_min>0||task_handle_process_info->encodec_para->aq_max>0)){
+                  //enc_ctx->qmax=task_handle_process_info->encodec_para->vq_max;
+                  enc_ctx->flags|=AV_CODEC_FLAG_QSCALE;
+                  enc_ctx->qmin=task_handle_process_info->encodec_para->aq_min;
+                  enc_ctx->qmax=task_handle_process_info->encodec_para->aq_max;
+
+              }
+
                 //设置音频滤镜描述 
                 AVBPrint arg;
                 av_bprint_init(&arg, 0, AV_BPRINT_SIZE_AUTOMATIC);
@@ -4901,20 +4936,33 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
             }
 
            if(in_codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+printf("audio encoder name %s \n",enc_ctx->codec->name);
+
+
+             if(!strcmp(enc_ctx->codec->name,"aac")){
 //aac编码参数设置
+//enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
+
                av_dict_set(&output_stream->encoder_opts,"aac_pred","1",0);
                av_dict_set(&output_stream->encoder_opts,"aac_coder","2",0);
               //
-              //libfkd-aac 设置 libfkd-aac只支持s16的采样格式
-//av_dict_set(&output_stream->encoder_opts,"header_period","1024",0);
-//av_dict_set(&output_stream->encoder_opts,"latm","1",0);
+              //
+             }
+            if(!strcmp(enc_ctx->codec->name,"libfdk_aac")){
 
-//av_dict_set(&output_stream->encoder_opts,"flags","+global_header",0);
+              //libfkd-aac 设置 libfkd-aac只支持s16的采样格式
+av_dict_set(&output_stream->encoder_opts,"header_period","100",0);
+av_dict_set(&output_stream->encoder_opts,"latm","1",0);
+//av_dict_set(&output_stream->encoder_opts,"vbr","5",0);
+//enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
+
+av_dict_set(&output_stream->encoder_opts,"flags","+global_header",0);
 
 //av_dict_set(&output_stream->encoder_opts,"profile","(lc)",0);
 
-          // }
            }
+           }
+
 
 
            if(in_codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
@@ -5156,24 +5204,27 @@ ist->next_pts = ist->pts =pkt->pts;
                 handle_arg->video_pkt_queue=video_pkt_queue;
                 //handle_arg->audio_pkt_queue=NULL;
 
-
+                for(int i=0;i<DEFAULT_VIDEO_THREADS;i++){
                     ret=pthread_create(&vid,NULL,only_dec_enc_native_cuda_video_codec_thread_func,handle_arg);
                     if(ret<0){
 
                         goto end;
 
                     }else{
-                      has_start_video_handle=true;
+                      //has_start_video_handle=true;
                     }
 
 
 
                 }
- printf("*************************1 %d   \n",pkt);
- printf("*************************1 %d   \n",pkt);
+                    has_start_video_handle=true;
+
+                }
+ //printf("*************************1 %d   \n",pkt);
+ //printf("*************************1 %d   \n",pkt);
 //av_usleep(10000);
        queue_video_pkt=av_packet_alloc();
-       printf("*************************2 %d    \n");
+  //     printf("*************************2 %d    \n");
      if(!queue_video_pkt){
 
 
@@ -5187,9 +5238,9 @@ break;
 
 //printf("&&&&&&&&&&& %d %"PRId64" %"PRId64"  %"PRId64" %d \n",pkt->pts,pkt->dts);
                 av_packet_move_ref(queue_video_pkt, pkt);
-printf("*************************1 %d   \n",pkt);
+//printf("*************************1 %d   \n",pkt);
                 //av_packet_unref(pkt);
-printf("&&&&&&&&&&&  %"PRId64" %"PRId64"  %"PRId64" %d \n",queue_video_pkt->pts,queue_video_pkt->dts);
+//printf("&&&&&&&&&&&  %"PRId64" %"PRId64"  %"PRId64" %d \n",queue_video_pkt->pts,queue_video_pkt->dts);
 
                 
 
@@ -5274,24 +5325,27 @@ printf("&&&&&&&&&&&  %"PRId64" %"PRId64"  %"PRId64" %d \n",queue_video_pkt->pts,
                    //handle_arg->video_pkt_queue=video_pkt_queue;
                    handle_arg->audio_pkt_queue=audio_pkt_queue;
 
-
+                   for(int i=0;i<DEFAULT_AUDIO_THREADS;i++){
                    ret=pthread_create(&vid,NULL,filter_audio_codec_thread_func,handle_arg);
                     if(ret<0){
 
                         goto end;
 
                     }else{
-                      has_start_audio_handle=true;
+                  //    has_start_audio_handle=true;
                     }
 
-
+                   
 
                 }
- printf("*************************1 %d   \n",pkt);
- printf("*************************1 %d   \n",pkt);
+
+  has_start_audio_handle=true;
+                }
+ //printf("*************************1 %d   \n",pkt);
+ //printf("*************************1 %d   \n",pkt);
 //av_usleep(10000);
        queue_audio_pkt=av_packet_alloc();
-       printf("*************************2 %d    \n");
+  //     printf("*************************2 %d    \n");
      if(!queue_audio_pkt){
 
 
@@ -5305,9 +5359,9 @@ break;
 
 //printf("&&&&&&&&&&& %d %"PRId64" %"PRId64"  %"PRId64" %d \n",pkt->pts,pkt->dts);
                 av_packet_move_ref(queue_audio_pkt, pkt);
-printf("*************************1 %d   \n",pkt);
+//printf("*************************1 %d   \n",pkt);
                 //av_packet_unref(pkt);
-printf("&&&&&&&&&&&  %"PRId64" %"PRId64"  %"PRId64" %d \n",queue_audio_pkt->pts,queue_audio_pkt->dts);
+//printf("&&&&&&&&&&&  %"PRId64" %"PRId64"  %"PRId64" %d \n",queue_audio_pkt->pts,queue_audio_pkt->dts);
 
                 
 
@@ -6080,7 +6134,7 @@ gen_empty_layout_frame_yuva420p(filter_graph_des->subtitle_empty_frame,10,10);
                 enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
                 //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
                 //enc_ctx->bit_rate=384000; 
-                enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
+                //enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
                 enc_ctx->profile=FF_PROFILE_AAC_MAIN;
 
                 //音频设置VBR,对于dts和trueHD等多声道音频，建议设置动态码率,提升音频编码速度导致的卡顿
@@ -7069,10 +7123,11 @@ printf("##################1 %s \n",subtitle_filename);
 
 
     //info->control->seek_time=1000;
-    info->encodec_para->v_gop_size=300;
+    info->encodec_para->v_gop_size=120;
     info->encodec_para->v_max_b_frames=5;
-    //info->encodec_para->aq_min=0;
-    //info->encodec_para->aq_max=3;
+
+    info->encodec_para->aq_min=0;
+    info->encodec_para->aq_max=0;
     
     //ret=push_video_to_rtsp_subtitle_logo(in_filename,atoi(argv[4]),atoi(argv[5]), subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
     ret=push2rtsp_sub_logo_cuda_thread(in_filename,atoi(argv[4]),atoi(argv[5]), atoi(argv[6]),subtitle_filename, &logo_frame,rtsp_path,if_hw,true,480,480*6,480*3,info);
