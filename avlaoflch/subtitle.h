@@ -12,7 +12,7 @@
 
 #define LAOFMC_SUB_FILE_ASS_SUFFIX ".ass"
 
-#define LAOFMC_SUB_FILE_ASS_SUFFIX ".srt"
+#define LAOFMC_SUB_FILE_SRT_SUFFIX ".srt"
 
 enum var_name {
     VAR_MAIN_W,    VAR_MW,
