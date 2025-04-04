@@ -1572,19 +1572,25 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
     //av_thread_message_flush(*video_pkt_queue);
 
     while(1){
-      printf("#################################---3 %d  %d\n",*video_pkt_queue,pkt);
+      //printf("#################################---3 %d  %d\n",*video_pkt_queue,pkt);
 
       ret=av_thread_message_queue_recv(*video_pkt_queue, &pkt, 0);
-      printf("#################################---4 %d\n");
+      //printf("#################################---4 %d\n");
 
       if(ret<0){
 
         av_log(NULL,AV_LOG_ERROR,"video queue receive pkt failed!\n");
+        //continue;
+        if(ret==AVERROR_EOF){
+          av_log(NULL,AV_LOG_ERROR,"video AVERROR_EOF !\n");
+
+          return AVERROR_EOF;
+        }
         continue;
 
       }else{
 
-        printf("#################################33 %"PRId64" %d\n",pkt->dts,ret);
+        //printf("#################################33 %"PRId64" %d\n",pkt->dts,ret);
 
         av_log(NULL,AV_LOG_INFO,"video pkt receive from queue :%"PRId64" %d \n",pkt->dts,pkt);
 
@@ -1616,10 +1622,10 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
 
 
 
-        printf("#################################34 %"PRId64"\n",pkt->dts);
-        printf("#################################34-v1 %d  \n",dec_ctx);
+        //printf("#################################34 %"PRId64"\n",pkt->dts);
+        //printf("#################################34-v1 %d  \n",dec_ctx);
 
-        printf("#################################34-v2 %d %d \n",pkt,ret);
+        //printf("#################################34-v2 %d %d \n",pkt,ret);
 
         ret = avcodec_send_packet(dec_ctx, pkt);
 
@@ -1631,32 +1637,32 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
 
         while (ret >= 0) {
           ret = avcodec_receive_frame(dec_ctx, frame);
-          printf("dec_frame_video:pkt_pts:%"PRId64" pkt_dts:%"PRId64" duration:%d base_time:{%d %d} frame_pts:%"PRId64"  pic_type:%f frame_rate:%d \n",pkt->pts,pkt->dts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,frame->pts,av_q2d(dec_ctx->framerate));
+          //printf("dec_frame_video:pkt_pts:%"PRId64" pkt_dts:%"PRId64" duration:%d base_time:{%d %d} frame_pts:%"PRId64"  pic_type:%f frame_rate:%d \n",pkt->pts,pkt->dts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,frame->pts,av_q2d(dec_ctx->framerate));
           if (ret == AVERROR(EAGAIN)) {
 
             av_frame_unref(frame);
             av_packet_unref(pkt);
-            printf("1 \n");
+            //printf("1 \n");
             // return ret;
             //
             continue;
 
           }else if( ret == AVERROR_EOF){
-            printf("2 \n");
+            //printf("2 \n");
             break;
           }else if (ret < 0) {
             av_log(NULL, "Error during decoding %d \n ",ret);
             av_frame_unref(frame);
-            printf("3 \n");
+            //printf("3 \n");
             break ;
           }
 
-          printf("dec_frame1-2:pts:%"PRId64" dts:%"PRId64" duration:%d base_time:{%d %d} \n",frame->pts,pkt->pts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
+          //printf("dec_frame1-2:pts:%"PRId64" dts:%"PRId64" duration:%d base_time:{%d %d} \n",frame->pts,pkt->pts,pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den);
 
           s_frame_pts=frame->pts;
 
 
-          printf("frame_pict_type:%d \n", pkt->flags);
+          //printf("frame_pict_type:%d \n", pkt->flags);
 
           //处理视频滤镜 
           //这两个变量在本文里没有用的，只是要传进去。
@@ -1859,7 +1865,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
             //处理text字幕
             //if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass!=NULL){
             if (filter_graph_des->ass!=NULL){
-              printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base)));
+              //printf("subtite frame pts:%s %s \n", av_ts2str(s_frame_pts),av_ts2str(av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base)));
               bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
               if(filter_graph_des->subtitle_time_offset>0){ 
                 frame->pts=s_frame_pts+av_rescale_q(filter_graph_des->subtitle_time_offset*1000,AV_TIME_BASE_Q,dec_ctx->time_base);//-av_rescale_q(input_streams[stream_mapping[pkt->stream_index]]->seek_offset*AV_TIME_BASE,AV_TIME_BASE_Q,dec_ctx->time_base);
@@ -1885,7 +1891,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
             }else if(filter_graph_des->sub_frame){
 
               bool if_empty_subtitle=*(filter_graph_des->subtitle_frame)==*(filter_graph_des->subtitle_empty_frame)?true:false;
-                            handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
+              handle_pgs_sub(filter_graph_des->subtitle_frame,filter_graph_des->sub_frame,s_frame_pts, dec_ctx->time_base,&if_empty_subtitle);
 
               if(if_empty_subtitle){
                 //printf("iiiiiiiiiiiii3 %d %d \n",sub_frame->is_display,sub_frame->pts);
@@ -1916,10 +1922,10 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
               av_packet_unref(out_pkt);
 
             }
-            printf("add subtile frame pts:%d %d \n", *(filter_graph_des->subtitle_frame),*(filter_graph_des->subtitle_empty_frame));
-            printf("ttttttttttttt %d \n",*logo_ctx);
+            //printf("add subtile frame pts:%d %d \n", *(filter_graph_des->subtitle_frame),*(filter_graph_des->subtitle_empty_frame));
+            //printf("ttttttttttttt %d \n",*logo_ctx);
             ret = av_buffersrc_add_frame(*logo_ctx, new_logo_frame);
-           
+
 
             if(ret < 0){
               av_log(NULL,"Error: av_buffersrc_add_frame failed\n",NULL);
@@ -1972,7 +1978,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
           }
           int ret_enc;
 
-          printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
+          //printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&4 %d \n",ret_enc);
           ret_enc = avcodec_send_frame(*enc_ctx, frame);
           if (ret_enc < 0) {
             av_frame_unref(frame);
@@ -2027,7 +2033,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
               out_pkt->dts=out_pkt->dts+output_streams[stream_mapping[pkt->stream_index]]->min_pts_dts;
               out_pkt->duration=1;//pkt->duration;//out_pkd.duration;
               //av_packet_rescale_ts(out_pkt,input_streams[stream_mapping[pkt->stream_index]]->st->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
-              printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
+              //printf("dec_frame:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
               av_packet_rescale_ts(out_pkt,(*enc_ctx)->time_base,output_streams[stream_mapping[pkt->stream_index]]->st->time_base);
               out_pkt->duration-=1;
 
@@ -2041,9 +2047,9 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
               output_streams[stream_mapping[pkt->stream_index]]->current_dts=out_pkt->dts;
 
 
-              printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
+              //printf("dec_frame2:pts:%"PRId64" dts:%"PRId64" duration %d base_time:{%d %d} delay:%f  mod: %d\n",out_pkt->pts,out_pkt->dts, out_pkt->duration,input_streams[0]->st->time_base.num,input_streams[0]->st->time_base.den,out_pkt->dts%8);
 
- 
+
             }
             //输出流
             ret_enc=(*handle_interleaved_write_frame)(pkt,out_pkt,frame,dec_ctx,enc_ctx,fmt_ctx,ofmt_ctx,input_streams,stream_mapping,output_streams);
@@ -2055,7 +2061,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
             break;
 
           }
-                }
+          }
 
           //         return ;//0;
         }else{
@@ -2899,14 +2905,14 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
         uint64_t origin_pkt_pts=pkt->pts;
         uint64_t origin_pkt_duration=pkt->duration;
         //printf("dec time base:{%d %d}input pkt duration:%"PRId64"\n",dec_ctx->time_base.den,dec_ctx->time_base.num,pkt->duration);
-        printf(" input pkt duration:%"PRId64"\n",pkt->duration);
+        //printf(" input pkt duration:%"PRId64"\n",pkt->duration);
 
 
         ret = avcodec_send_packet(dec_ctx, pkt);
 
-        printf("#################################34-a1 %d  \n",dec_ctx);
+        //printf("#################################34-a1 %d  \n",dec_ctx);
 
-        printf("#################################34-a2 %d  \n",pkt);
+        //printf("#################################34-a2 %d  \n",pkt);
 
         if (ret < 0) {
           av_packet_unref(pkt);
@@ -2980,12 +2986,12 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
               av_log(NULL, AV_LOG_ERROR, "Error while feeding the audio filtergraph\n");
             }
 
-            printf("#################################342-a1 %d  \n",dec_ctx);
+            //printf("#################################342-a1 %d  \n",dec_ctx);
 
-            printf("#################################342-a2 %d  \n",pkt);
+            //printf("#################################342-a2 %d  \n",pkt);
             //s_pts+=frame->nb_samples;
             s_pts=origin_pkt_pts;
-            printf("s_pts w:%"PRId64"\n" ,s_pts);
+            //printf("s_pts w:%"PRId64"\n" ,s_pts);
 
 
             // av_frame_unref(frame);
@@ -3010,11 +3016,9 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
 
               //s_pts-=enc_frame_size;
               //s_pts+=s_duation;
-              printf("s_pts :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts
-                  );
+              //printf("s_pts :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts);
               int ret_enc = avcodec_send_frame(*enc_ctx, frame);
-              printf("s_pts_2 :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts
-                  );
+              //printf("s_pts_2 :%"PRId64" frames_pts :%"PRId64"\n" ,s_pts,frame->pts);
               if (ret_enc < 0) {
                 fprintf(stderr, "Error sending a frame for encoding %d \n",ret_enc);
                 return 1; 
@@ -3049,7 +3053,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
                 if (out_pkt->data!=NULL) {
 
 
-                  printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
+                  //printf("truehd pts:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
 
 
                   pkt->stream_index=s_stream_index;
@@ -3067,7 +3071,7 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
                   //out_pkt->pts=av_gettime_relative()-input_streams[stream_mapping[pkt->stream_index]]->start_time;
 
                   out_pkt->duration=pkt->duration;
-                  printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
+                  //printf("truehd pts2:%"PRId64" s_pts :%"PRIu64" duration :%"PRIu64"\n",out_pkt->pts,s_pts,pkt->duration);
                   //   } else if(if_recreate_pts){
                   //  out_pkt->pts=s_pts+out_pkt->duration;
                   // }else {
@@ -3211,7 +3215,15 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
       if(ret<0){
 
         av_log(NULL,AV_LOG_ERROR,"audio queue receive pkt failed!\n");
+
+        if(ret==AVERROR_EOF){
+          av_log(NULL,AV_LOG_ERROR,"audio AVERROR_EOF !\n");
+
+          return AVERROR_EOF;
+        }
+
         continue;
+
 
       }else{
         // pkt=*pkt_point;
@@ -5073,7 +5085,7 @@ end:
 
     AVThreadMessageQueue **video_pkt_queue=av_mallocz(sizeof( AVThreadMessageQueue **));
     AVThreadMessageQueue **audio_pkt_queue=av_mallocz(sizeof( AVThreadMessageQueue **));
-    pthread_t vid;
+    pthread_t vid,aid;
 
     bool has_start_video_handle=false;
     bool has_start_audio_handle=false;
@@ -5245,8 +5257,8 @@ end:
 
       //选择视频流,音频流和字幕流
       if (i!=video_index&&i!=audio_index
-         &&i!=subtitle_index){
-      //if(i!=video_index){
+          &&i!=subtitle_index){
+        //if(i!=video_index){
         continue;
       }
       //数组扩容
@@ -5457,7 +5469,7 @@ end:
 
             //enc_ctx->sample_fmt=AV_SAMPLE_FMT_FLTP;
             //enc_ctx->sample_fmt=AV_SAMPLE_FMT_S16;
-            //enc_ctx->bit_rate=384000; 
+            //enc_ctx->bit_rate=480000; 
             //enc_ctx->bit_rate=input_streams[nb_input_streams-1]->dec_ctx->bit_rate;
 
             //enc_ctx->profile=FF_PROFILE_AAC_MAIN;
@@ -5523,8 +5535,12 @@ end:
 
             //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
 
-            av_dict_set(&output_stream->encoder_opts,"preset","p1",0);
+            //av_dict_set(&output_stream->encoder_opts,"preset","p1",0);
+ if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_preset){
 
+               av_dict_set(&output_stream->encoder_opts,"preset",task_handle_process_info->encodec_para->v_preset,0);
+               //av_dict_set(&output_stream->encoder_opts,"tune","ull",0)};
+           };
             //nvenc的preset不宜过低，过低也将出现视频卡顿
 
             // }
@@ -5594,7 +5610,7 @@ end:
       //task_handle_process_info->control->seek_time=0x00;
       //循环读取packet,直到接到任务取消信号
 
-      while (1) {
+      while (!task_handle_process_info->control->task_cancel) {
         /*处理控制速度
         */
 
@@ -5663,15 +5679,28 @@ end:
            * */
           ret = av_read_frame(ifmt_ctx, pkt); 
           //printf("&&&&&&&&&&&3  %"PRId64" %"PRId64"  %"PRId64" %d \n",pkt->pts,pkt->dts,0,pkt->stream_index);
-          //uint8_t *sd=av_packet_get_side_data(pkt, AV_PKT_DATA_QUALITY_STATS, NULL);
-          //printf("read frame side data:%d\n",sd); 
           if (ret == AVERROR(EAGAIN)) {
 
 
             continue;
           }else if(ret == AVERROR_EOF){
 
+
             task_handle_process_info->handled_rate=1.00;
+
+            av_thread_message_queue_set_err_recv(*video_pkt_queue,AVERROR_EOF);
+            av_thread_message_queue_set_err_recv(*audio_pkt_queue,AVERROR_EOF);
+
+            ret =pthread_join(vid,NULL);
+            if(ret){
+              av_log(NULL, AV_LOG_ERROR, "close video recv thread failed!\n");
+
+            }
+            ret =pthread_join(aid,NULL);
+            if(ret){
+              av_log(NULL, AV_LOG_ERROR, "close audio recv thread failed!\n");
+
+            }
             goto end;
 
           }
@@ -5716,6 +5745,10 @@ end:
 
             //处理视频解编码
             if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
+
+           task_handle_process_info->pass_duration=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
+          task_handle_process_info->handled_rate=(float)task_handle_process_info->pass_duration/(float)task_handle_process_info->total_duration;
+
 
               //转换time_base,从steam->enc_ctx
               if (pkt->data!=NULL) {
@@ -5875,7 +5908,7 @@ end:
                 handle_arg->audio_pkt_queue=audio_pkt_queue;
 
                 for(int i=0;i<DEFAULT_AUDIO_THREADS;i++){
-                  ret=pthread_create(&vid,NULL,filter_audio_codec_thread_func,handle_arg);
+                  ret=pthread_create(&aid,NULL,filter_audio_codec_thread_func,handle_arg);
                   if(ret<0){
 
                     goto end;
@@ -5954,7 +5987,7 @@ end:
 
             }
             //处理字幕解编码
-            if(0&&ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE&&(handle_subtitle_codec!=NULL)){
+            if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_SUBTITLE&&(handle_subtitle_codec!=NULL)){
 
               //log_packet(ifmt_ctx, pkt, "in");
 
@@ -6031,7 +6064,7 @@ end:
           //av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
 
 
-
+if(&input_streams[i]->dec_ctx->hw_device_ctx)
           av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
 
           //avcodec_close(input_streams[i]->dec_ctx);
