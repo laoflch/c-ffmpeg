@@ -604,150 +604,6 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
     return ost;
   }
 
-  int init_filter_graph_func(AVPacket *pkt,AVPacket *out_pkt,AVFrame *frame,AVCodecContext *dec_ctx,AVCodecContext **enc_ctx,AVFormatContext *fmt_ctx,AVFormatContext *ofmt_ctx,int out_stream_index,int (*handle_interleaved_write_frame)(AVPacket *,AVPacket *,AVFrame *,AVCodecContext *,AVCodecContext **,AVFormatContext *,AVFormatContext *,InputStream **,int *,OutputStream **),InputStream **input_streams,int *stream_mapping,AVFilterGraph **filter_graph,AVFilterContext **mainsrc_ctx,AVFilterContext **logo_ctx,AVFilterContext **resultsink_ctx,FilterGraph *filter_graph_des,OutputStream **output_streams ){
-    AVFilterInOut *inputs, *cur, *outputs;
-    int ret;
-
-    if(  *filter_graph==NULL ){
-      AVFilterGraph *filter_graph_point;
-
-      AVFilterContext *mainsrc_ctx_point,*subtitle_ctx_point,*logo_ctx_point,*resultsink_ctx_point ;
-      //初始化滤镜容器
-      filter_graph_point = avfilter_graph_alloc();
-
-      *filter_graph=filter_graph_point;
-      if (!filter_graph) {
-        printf("Error: allocate filter graph failed\n");
-        return -1;
-      }
-
-      filter_graph_point->nb_threads=10;
-      filter_graph_point->thread_type=FF_THREAD_SLICE;
-
-      // 因为 filter 的输入是 AVFrame ，所以 filter 的时间基就是 AVFrame 的时间基
-      //time_base 必须与输入的dec_ctx的time一致，字幕才能正常显示
-      AVRational tb = dec_ctx->time_base;
-      AVRational fr = dec_ctx->framerate;//av_guess_frame_rate(fmt_ctx, fmt_ctx->streams[0], NULL);
-      //AVRational logo_sar = logo_frame->sample_aspect_ratio;
-      AVRational sar = frame->sample_aspect_ratio;
-
-      AVBPrint args;
-      av_bprint_init(&args, 0, AV_BPRINT_SIZE_AUTOMATIC);
-
-      av_bprintf(&args,
-          "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[main];"
-          // "buffer=video_size=%dx%d:pix_fmt=%d:time_base=%d/%d:pixel_aspect=%d/%d:frame_rate=%d/%d[logo];"
-          //"[main][logo]overlay_cuda=x=%d:y=%d[result];"
-          //"[result]format=yuv420p[result_2];" 
-          //"[main]scale_cuda=%d:%d:format=cuda[result];"
-          "[main]buffersink",
-          3840, 1616, AV_PIX_FMT_CUDA, tb.num,tb.den,sar.num, sar.den,fr.num, fr.den//,3840,1616
-          // logo_frame->width,logo_frame->height,logo_frame->format,1001,48000,2835,2835,24000,1001,
-          //sw_frame->width-logo_frame->width,sw_frame->height-logo_frame->height,
-          //(*enc_ctx)->width,(*enc_ctx)->height)
-        );
-      ret = avfilter_graph_parse2(filter_graph_point, args.str, &inputs, &outputs);
-      if (ret < 0) {
-        printf("Cannot parse2 graph\n");
-        return ret;
-      }
-
-      //  printf("**********************************88 %d \n",dec_ctx->hw_device_ctx);
-      //hw_device_setup_for_filter(filter_graph_point, input_streams[0]->dec_ctx->hw_device_ctx);
-      //
-      //
-      //
-      for(int i=0;i<filter_graph_point->nb_filters;i++){
-        filter_graph_point->filters[i]->hw_device_ctx=av_buffer_ref(dec_ctx->hw_device_ctx);
-
-      }
-      //正式打开滤镜
-      ret = avfilter_graph_config(filter_graph_point, NULL);
-
-      if (ret < 0) {
-        printf("Cannot configure graph\n");
-        return ret;
-      }
-      avfilter_inout_free(&inputs);
-      avfilter_inout_free(&outputs);
-
-
-      //根据 名字 找到 AVFilterContext
-      mainsrc_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffer_0");
-      *mainsrc_ctx=mainsrc_ctx_point;
-      //printf("**********************************88 %d \n",filter_graph_point);
-
-
-
-      // logo_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffer_0");
-      //*logo_ctx=logo_ctx_point;
-      resultsink_ctx_point = avfilter_graph_get_filter(filter_graph_point, "Parsed_buffersink_1");
-      *resultsink_ctx=resultsink_ctx_point;
-
-
-
-      /*处理ass,srt 字幕
-       *
-       * 初始化AssContext*/
-
-      /*        if (filter_graph_des->subtitle_path!=NULL&&strcmp(filter_graph_des->subtitle_path,"")>0&&filter_graph_des->ass==NULL){
-
-                filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
-                filter_graph_des->ass->filename=filter_graph_des->subtitle_path;
-                filter_graph_des->ass->stream_index=-1;
-                filter_graph_des->ass->charenc=filter_graph_des->subtitle_charenc;
-                filter_graph_des->ass->force_style=NULL;
-                filter_graph_des->ass->fontsdir=NULL;
-                filter_graph_des->ass->original_w=0;
-                filter_graph_des->ass->alpha=0;
-
-                if(endWith(filter_graph_des->ass->filename,LAOFMC_SUB_FILE_ASS_SUFFIX)){
-                init_ass(filter_graph_des->ass);
-
-                }else{
-                init_subtitles(filter_graph_des->ass);
-
-                }
-
-                config_input(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
-
-                }
-                */
-
-      /*
-       *文件内部字幕流处理
-       */
-      /*                if(filter_graph_des->sub_frame&&filter_graph_des->subtitle_stream_index>=0){*/
-      /*处理pgs 字幕
-       *
-       * 初始化OverlayContext*/
-      /*   filter_graph_des->overlay_ctx=init_overlay_context(AV_PIX_FMT_YUV420P);
-
-           }else if(filter_graph_des->subtitle_stream_index>=0){
-           */
-      /*处理ass,srt 字幕
-       *
-       * 初始化AssContext*/
-      /*        filter_graph_des->ass = (AssContext *)av_malloc(sizeof(AssContext));
-                filter_graph_des->ass->stream_index=filter_graph_des->subtitle_stream_index;
-                filter_graph_des->ass->charenc=NULL;
-                filter_graph_des->ass->force_style=NULL;
-                filter_graph_des->ass->fontsdir=NULL;
-                filter_graph_des->ass->original_w=0;
-                filter_graph_des->ass->alpha=0;
-
-      //动态加载字幕文件
-      init_subtitles_dynamic(filter_graph_des->ass,filter_graph_des->subtitle_dec_ctx);
-      //init_subtitles(filter_graph_des->ass);
-      //初始化配置ASS
-      config_ass(filter_graph_des->ass, AV_PIX_FMT_YUV420P,  (*enc_ctx)->width,(*enc_ctx)->height);
-      }
-
-*/
-    }
-
-
-  }
 
   int handle_pgs_sub(AVFrame **frame,SubtitleFrame *sub_frame,int64_t pts,AVRational time_base,bool *if_empty_subtitle){
     printf("sub_frame pts:%"PRId64" %"PRId64"\n",sub_frame->pts,(*frame)->pts);
@@ -1176,12 +1032,6 @@ void add_input_stream_cuda( AVFormatContext *ic, int stream_index,int input_stre
 
   }
 
-
-  static void free_pkt(void *arg){
-
-
-
-  }
   static void only_dec_enc_native_cuda_video_codec_thread_func2(HandleVideoThreadArg *arg){
 
     /* int ret=0;
@@ -5536,47 +5386,47 @@ end:
             //((AVHWFramesContext *)((*enc_ctx)->hw_frames_ctx->data))->sw_format=AV_PIX_FMT_YUV420P;
 
             //av_dict_set(&output_stream->encoder_opts,"preset","p1",0);
- if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_preset){
+            if(task_handle_process_info&&task_handle_process_info->encodec_para&&task_handle_process_info->encodec_para->v_preset){
 
-               av_dict_set(&output_stream->encoder_opts,"preset",task_handle_process_info->encodec_para->v_preset,0);
-               //av_dict_set(&output_stream->encoder_opts,"tune","ull",0)};
-           };
-            //nvenc的preset不宜过低，过低也将出现视频卡顿
+              av_dict_set(&output_stream->encoder_opts,"preset",task_handle_process_info->encodec_para->v_preset,0);
+              //av_dict_set(&output_stream->encoder_opts,"tune","ull",0)};
+          };
+          //nvenc的preset不宜过低，过低也将出现视频卡顿
 
-            // }
+          // }
+        }
+
+        if(1){ 
+          //    if(in_codecpar->codec_type!=AVMEDIA_TYPE_VIDEO){
+          /*打开编码Context
+          */
+          if ((ret = avcodec_open2(enc_ctx, output_stream->enc,&output_stream->encoder_opts )) < 0) {
+            av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
+            goto end;
+          }  
+
+          //从编码Context拷贝参数给输出流,必须在avcodec_open2之后再设置输出流参数;
+          ret = avcodec_parameters_from_context(out_stream->codecpar,enc_ctx );
+          if(ret < 0){
+            av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
+            goto end;
           }
 
-          if(1){ 
-            //    if(in_codecpar->codec_type!=AVMEDIA_TYPE_VIDEO){
-            /*打开编码Context
-            */
-            if ((ret = avcodec_open2(enc_ctx, output_stream->enc,&output_stream->encoder_opts )) < 0) {
-              av_log(NULL,AV_LOG_ERROR,"open codec faile %d \n",ret);
-              goto end;
-            }  
-
-            //从编码Context拷贝参数给输出流,必须在avcodec_open2之后再设置输出流参数;
-            ret = avcodec_parameters_from_context(out_stream->codecpar,enc_ctx );
-            if(ret < 0){
-              av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
-              goto end;
-            }
 
 
 
+        }}else{
 
-          }}else{
+          //不编解码仅有Packet转发
+          ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
+          if (ret < 0) {
+            av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
+            goto end;
+          }
 
-            //不编解码仅有Packet转发
-            ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
-            if (ret < 0) {
-              av_log(NULL,AV_LOG_ERROR, "Failed to copy codec parameters\n");
-              goto end;
-            }
+        } 
 
-          } 
-
-        }}
+      }}
       //打印输出流信息
       av_dump_format(ofmt_ctx, 0, rtsp_push_path, 1);
       //打开输出流文件
@@ -5746,8 +5596,8 @@ end:
             //处理视频解编码
             if(ifmt_ctx->streams[pkt->stream_index]->codecpar->codec_type==AVMEDIA_TYPE_VIDEO){
 
-           task_handle_process_info->pass_duration=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
-          task_handle_process_info->handled_rate=(float)task_handle_process_info->pass_duration/(float)task_handle_process_info->total_duration;
+              task_handle_process_info->pass_duration=av_rescale_q(pkt->pts,ifmt_ctx->streams[pkt->stream_index]->time_base,AV_TIME_BASE_Q);
+              task_handle_process_info->handled_rate=(float)task_handle_process_info->pass_duration/(float)task_handle_process_info->total_duration;
 
 
               //转换time_base,从steam->enc_ctx
@@ -6064,8 +5914,8 @@ end:
           //av_buffer_unref(&input_streams[i]->dec_ctx->hw_frames_ctx);
 
 
-if(&input_streams[i]->dec_ctx->hw_device_ctx)
-          av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
+          if(&input_streams[i]->dec_ctx->hw_device_ctx)
+            av_buffer_unref(&input_streams[i]->dec_ctx->hw_device_ctx);
 
           //avcodec_close(input_streams[i]->dec_ctx);
           av_log(NULL,AV_LOG_INFO,"free dec_ctx num:%d \n",i);
